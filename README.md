@@ -20,6 +20,12 @@ The client addon for the Grizzle WoW server, plus a launcher that keeps it up to
 Each time it runs, the launcher downloads the latest addon into `Interface/AddOns/Grizzle`, then
 starts WoW. If the download fails, it starts WoW with the version you already have.
 
+## Testing (Test realm)
+
+To try the addon version being tested on the Test realm, also download `launcher/Play Grizzle (Test).cmd`
+into the WoW folder and start the game with it (Linux: `GRIZZLE_BRANCH=test ./play-grizzle.sh`).
+Go back to the normal launcher for the main realm; it puts the regular version back.
+
 ## Manual install
 
 Copy the `Grizzle` folder to `Interface/AddOns/` in your WoW folder.

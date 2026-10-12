@@ -1,9 +1,11 @@
 # Play Grizzle: updates the Grizzle addon from GitHub, then starts WoW.
 # Lives in the WoW folder (next to Wow.exe). Run it through "Play Grizzle.cmd".
 # If the update fails (no internet, GitHub down), it says so and starts WoW anyway.
+# -Branch test gets the addon being tested on the Test realm ("Play Grizzle (Test).cmd").
+
+param([string]$Branch = "main")
 
 $Repo   = "gracks/grizzle-addon"   # GitHub owner/repo holding the addon
-$Branch = "main"
 
 $ErrorActionPreference = "Stop"
 $WowDir = $PSScriptRoot
@@ -11,7 +13,7 @@ $AddOns = Join-Path $WowDir "Interface\AddOns"
 $Tmp    = Join-Path ([IO.Path]::GetTempPath()) ("grizzle-" + [Guid]::NewGuid())
 
 try {
-    Write-Host "Updating the Grizzle addon..."
+    Write-Host "Updating the Grizzle addon ($Branch)..."
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     New-Item -ItemType Directory -Path $Tmp | Out-Null
     $Zip = Join-Path $Tmp "addon.zip"

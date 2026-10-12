@@ -5,9 +5,10 @@
 # How WoW is started can be changed without editing this file, e.g.:
 #   GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh
 #   WINEPREFIX=~/games/wow ./play-grizzle.sh
+# To get the addon being tested on the Test realm: GRIZZLE_BRANCH=test ./play-grizzle.sh
 
 REPO="gracks/grizzle-addon"   # GitHub owner/repo holding the addon
-BRANCH="main"
+BRANCH="${GRIZZLE_BRANCH:-main}"
 
 WOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADDONS="$WOW_DIR/Interface/AddOns"
@@ -33,7 +34,7 @@ update() {
     mkdir -p "$ADDONS" && rm -rf "$ADDONS/Grizzle" && cp -r "$src" "$ADDONS/Grizzle"
 }
 
-echo "Updating the Grizzle addon..."
+echo "Updating the Grizzle addon ($BRANCH)..."
 if update; then
     echo "Grizzle addon is up to date."
 else
