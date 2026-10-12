@@ -6,6 +6,7 @@ local CAMPFIRE_SPELL_ID = 25085;  -- Bright Campfire (ColdSystem.CampfireSpellId
 local WARNING_SPELL_ID = 38639;   -- Biting Cold warning (ColdSystem.WarningSpellId)
 local COLD_SPELL_ID = 68510;      -- Penetrating Cold (ColdSystem.ColdSpellId)
 local WARMTH_SPELL_ID = 7358;     -- Cozy Fire (ColdSystem.WarmthSpellId)
+local WET_SPELL_ID = 61870;       -- Drenched (Wet.SpellId)
 
 -- Global tooltip scanner - runs on every frame to catch any tooltip
 -- This is a fallback that should catch tooltips regardless of how they're created
@@ -466,3 +467,30 @@ frame:SetScript("OnEvent", function(self, event, addonName)
     end
 end);
 
+-- Drenched (Wet): the game's own tooltip only says "Drenched!", so explain what it does.
+-- The buff bar uses SetUnitAura; target and party frames use SetUnitBuff / SetUnitDebuff.
+local WET_TEXT = "Soaked. Your fire spells are weaker, fire hurts you less and nature hurts you more. Dry off indoors or by a fire.";
+
+local function AddWetText(tooltip, spellId)
+    if spellId ~= WET_SPELL_ID then return end
+    for i = 2, tooltip:NumLines() do
+        local line = _G["GameTooltipTextLeft" .. i];
+        if line and line:GetText() == "Drenched!" then
+            line:SetText(WET_TEXT);
+            tooltip:Show();
+            return;
+        end
+    end
+    tooltip:AddLine(WET_TEXT, 1, 0.82, 0, true);
+    tooltip:Show();
+end
+
+hooksecurefunc(GameTooltip, "SetUnitAura", function(self, unit, index, filter)
+    AddWetText(self, select(11, UnitAura(unit, index, filter)));
+end);
+hooksecurefunc(GameTooltip, "SetUnitBuff", function(self, unit, index, filter)
+    AddWetText(self, select(11, UnitBuff(unit, index, filter)));
+end);
+hooksecurefunc(GameTooltip, "SetUnitDebuff", function(self, unit, index, filter)
+    AddWetText(self, select(11, UnitDebuff(unit, index, filter)));
+end);
