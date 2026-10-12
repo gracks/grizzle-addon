@@ -5,7 +5,8 @@
 local CAMPFIRE_SPELL_ID = 25085;  -- Bright Campfire (ColdSystem.CampfireSpellId)
 local WARNING_SPELL_ID = 38639;   -- Biting Cold warning (ColdSystem.WarningSpellId)
 local COLD_SPELL_ID = 68510;      -- Penetrating Cold (ColdSystem.ColdSpellId)
-local WARMTH_SPELL_ID = 7358;     -- Cozy Fire (ColdSystem.WarmthSpellId)
+local WARMTH_SPELL_ID = 7358;     -- Cozy Fire: the campfire rest buff (CampfireRest.SpellId)
+local REST_TEXT = "Rested by a campfire: +15% health, +3% critical strike chance, and faster health and mana regeneration out of combat.";
 local WET_SPELL_ID = 61870;       -- Drenched (Wet.SpellId)
 
 -- Global tooltip scanner - runs on every frame to catch any tooltip
@@ -205,7 +206,7 @@ local function ModifyColdTooltip()
     GameTooltip:Show();
 end
 
--- Function to override Cozy Fire (warmth buff) tooltip
+-- Function to override the Cozy Fire tooltip (campfire rest buff; it says "Increases Spirit by 7", which is switched off)
 local function ModifyWarmthTooltip()
     local numLines = GameTooltip:NumLines();
     local foundDescription = false;
@@ -217,7 +218,7 @@ local function ModifyWarmthTooltip()
             if text and not foundDescription then
                 -- Look for the main description line
                 if string.len(text) > 10 and not string.find(text, "Rank") and not string.find(text, "Requires") and not string.find(text, "Cozy") then
-                    leftText:SetText("You are warmed by a campfire. This protects you from the cold.");
+                    leftText:SetText(REST_TEXT);
                     foundDescription = true;
                 end
             end
@@ -226,7 +227,7 @@ local function ModifyWarmthTooltip()
     
     -- If we didn't find a description line, add one at the end
     if not foundDescription then
-        GameTooltip:AddLine("You are warmed by a campfire. This protects you from the cold.", 1, 1, 1, true);
+        GameTooltip:AddLine(REST_TEXT, 1, 1, 1, true);
         GameTooltip:Show();
     end
 end
@@ -467,30 +468,44 @@ frame:SetScript("OnEvent", function(self, event, addonName)
     end
 end);
 
--- Drenched (Wet): the game's own tooltip only says "Drenched!", so explain what it does.
--- The buff bar uses SetUnitAura; target and party frames use SetUnitBuff / SetUnitDebuff.
-local WET_TEXT = "Soaked. Your fire spells are weaker, fire hurts you less and nature hurts you more. Dry off indoors or by a fire.";
+-- Grizzle's borrowed marker spells: the game's own tooltip text doesn't fit (or is missing), so
+-- replace it with what the marker actually does. The buff bar uses SetUnitAura; target and party
+-- frames use SetUnitBuff / SetUnitDebuff.
+local MARKER_TEXT = {
+    [WET_SPELL_ID] = {   -- Drenched (Wet.SpellId)
+        old = "Drenched!",
+        text = "Soaked. Fire hurts you less; frost and nature hurt you more. Mobs notice you from closer. Slower health regen while standing. Dry off indoors or by a fire.",
+    },
+    [56489] = {          -- Warming Up (CampfireRest.WarmingSpellId)
+        old = "Movement speed increased.",
+        text = "Warming up by the fire. Stay seated until this runs out to get Cozy Fire.",
+    },
+    -- Cozy Fire (CampfireRest.SpellId) is handled by ModifyWarmthTooltip above
+};
 
-local function AddWetText(tooltip, spellId)
-    if spellId ~= WET_SPELL_ID then return end
-    for i = 2, tooltip:NumLines() do
-        local line = _G["GameTooltipTextLeft" .. i];
-        if line and line:GetText() == "Drenched!" then
-            line:SetText(WET_TEXT);
-            tooltip:Show();
-            return;
+local function AddMarkerText(tooltip, spellId)
+    local marker = spellId and MARKER_TEXT[spellId];
+    if not marker then return end
+    if marker.old then
+        for i = 2, tooltip:NumLines() do
+            local line = _G["GameTooltipTextLeft" .. i];
+            if line and line:GetText() == marker.old then
+                line:SetText(marker.text);
+                tooltip:Show();
+                return;
+            end
         end
     end
-    tooltip:AddLine(WET_TEXT, 1, 0.82, 0, true);
+    tooltip:AddLine(marker.text, 1, 0.82, 0, true);
     tooltip:Show();
 end
 
 hooksecurefunc(GameTooltip, "SetUnitAura", function(self, unit, index, filter)
-    AddWetText(self, select(11, UnitAura(unit, index, filter)));
+    AddMarkerText(self, select(11, UnitAura(unit, index, filter)));
 end);
 hooksecurefunc(GameTooltip, "SetUnitBuff", function(self, unit, index, filter)
-    AddWetText(self, select(11, UnitBuff(unit, index, filter)));
+    AddMarkerText(self, select(11, UnitBuff(unit, index, filter)));
 end);
 hooksecurefunc(GameTooltip, "SetUnitDebuff", function(self, unit, index, filter)
-    AddWetText(self, select(11, UnitDebuff(unit, index, filter)));
+    AddMarkerText(self, select(11, UnitDebuff(unit, index, filter)));
 end);
