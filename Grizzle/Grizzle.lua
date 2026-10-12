@@ -474,7 +474,7 @@ end);
 local MARKER_TEXT = {
     [WET_SPELL_ID] = {   -- Drenched (Wet.SpellId)
         old = "Drenched!",
-        text = "Soaked. Fire hurts you less; frost and nature hurt you more. Mobs notice you from closer. Slower health regen while standing. Dry off indoors or by a fire.",
+        text = "Fire hurts you less; frost and nature hurt you more. Slower health regen while standing. Dry off indoors or by a fire.",
     },
     [56489] = {          -- Warming Up (CampfireRest.WarmingSpellId)
         old = "Movement speed increased.",
