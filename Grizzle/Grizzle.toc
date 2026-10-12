@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: Grizzle
+## Notes: Custom tooltip overrides for cold system and campfire
+## Version: 1.0
+
+Grizzle.lua
+
