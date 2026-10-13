@@ -29,9 +29,10 @@ update() {
         python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' \
             "$tmp/addon.zip" "$tmp" || return 1
     fi
-    src="$(dirname "$(find "$tmp" -path '*/Grizzle/Grizzle.toc' | head -n1)")"
-    [ -f "$src/Grizzle.toc" ] || return 1
-    mkdir -p "$ADDONS" && rm -rf "$ADDONS/Grizzle" && cp -r "$src" "$ADDONS/Grizzle"
+    src="$(dirname "$(find "$tmp" -path '*/grizzle/grizzle.toc' | head -n1)")"
+    [ -f "$src/grizzle.toc" ] || return 1
+    # Grizzle: the folder's old name (WoW would load both)
+    mkdir -p "$ADDONS" && rm -rf "$ADDONS/Grizzle" "$ADDONS/grizzle" && cp -r "$src" "$ADDONS/grizzle"
 }
 
 echo "Updating the Grizzle addon ($BRANCH)..."

@@ -19,12 +19,12 @@ This helps players understand that the warning is building up to a more severe d
 
 ## Installation
 
-1. Copy the `Grizzle` folder (containing `Grizzle.toc` and `Grizzle.lua`) to your World of Warcraft `Interface/AddOns/` directory.
+1. Copy the `grizzle` folder (containing `grizzle.toc` and `grizzle.lua`) to your World of Warcraft `Interface/AddOns/` directory.
 
    Example path:
    ```
-   World of Warcraft/Interface/AddOns/Grizzle/Grizzle.toc
-   World of Warcraft/Interface/AddOns/Grizzle/Grizzle.lua
+   World of Warcraft/Interface/AddOns/grizzle/grizzle.toc
+   World of Warcraft/Interface/AddOns/grizzle/grizzle.lua
    ```
 
 2. Restart World of Warcraft or type `/reload` in-game.
@@ -33,7 +33,7 @@ This helps players understand that the warning is building up to a more severe d
 
 ## Configuration
 
-To change the displayed values, edit `Grizzle.lua` and modify these constants at the top:
+To change the displayed values, edit `grizzle.lua` and modify these constants at the top:
 
 ```lua
 -- Spell IDs (update if you change them in worldserver.conf)
@@ -55,7 +55,7 @@ Make sure these values match your server configuration in `worldserver.conf`:
 
 ## Customizing Tooltip Text
 
-To change the Biting Cold warning message, edit the `ModifyWarningTooltip()` function in `Grizzle.lua`:
+To change the Biting Cold warning message, edit the `ModifyWarningTooltip()` function in `grizzle.lua`:
 
 ```lua
 leftText:SetText("Your custom warning message here.");
@@ -69,5 +69,5 @@ leftText:SetText("Your custom warning message here.");
   - Spell links in chat
   - Spellbook entries
   - Action bar tooltips
-- If you change spell IDs in `worldserver.conf`, remember to update them in `Grizzle.lua` as well.
+- If you change spell IDs in `worldserver.conf`, remember to update them in `grizzle.lua` as well.
 

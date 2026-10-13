@@ -1,7 +1,7 @@
 # Play Grizzle: updates the Grizzle addon from GitHub, then starts WoW.
-# Lives in the WoW folder (next to Wow.exe). Run it through "Play Grizzle.cmd".
+# Lives in the WoW folder (next to Wow.exe). Run it through play-grizzle.cmd.
 # If the update fails (no internet, GitHub down), it says so and starts WoW anyway.
-# -Branch test gets the addon being tested on the Test realm ("Play Grizzle (Test).cmd").
+# -Branch test gets the addon being tested on the Test realm (play-grizzle-test.cmd).
 
 param([string]$Branch = "main")
 
@@ -19,11 +19,11 @@ try {
     $Zip = Join-Path $Tmp "addon.zip"
     Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/$Repo/archive/refs/heads/$Branch.zip" -OutFile $Zip
     Expand-Archive -Path $Zip -DestinationPath $Tmp
-    $Src = Get-ChildItem -Path $Tmp -Directory -Recurse -Filter "Grizzle" |
-        Where-Object { Test-Path (Join-Path $_.FullName "Grizzle.toc") } | Select-Object -First 1
+    $Src = Get-ChildItem -Path $Tmp -Directory -Recurse -Filter "grizzle" |
+        Where-Object { Test-Path (Join-Path $_.FullName "grizzle.toc") } | Select-Object -First 1
     if (-not $Src) { throw "the download has no Grizzle addon folder" }
     New-Item -ItemType Directory -Force -Path $AddOns | Out-Null
-    $Dest = Join-Path $AddOns "Grizzle"
+    $Dest = Join-Path $AddOns "grizzle"
     if (Test-Path $Dest) { Remove-Item -Recurse -Force $Dest }
     Copy-Item -Recurse -Path $Src.FullName -Destination $Dest
     Write-Host "Grizzle addon is up to date."
