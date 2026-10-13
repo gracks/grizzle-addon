@@ -1,4 +1,4 @@
-# Play Grizzle: updates the Grizzle addon from GitHub, then starts WoW.
+# Play Grizzle: updates the Grizzle addon and client patch from GitHub, then starts WoW.
 # Lives in the WoW folder (next to Wow.exe). Run it through play-grizzle.cmd.
 # If the update fails (no internet, GitHub down), it says so and starts WoW anyway.
 # -Branch test gets the addon being tested on the Test realm (play-grizzle-test.cmd).
@@ -10,6 +10,7 @@ $Repo   = "gracks/grizzle-addon"   # GitHub owner/repo holding the addon
 $ErrorActionPreference = "Stop"
 $WowDir = $PSScriptRoot
 $AddOns = Join-Path $WowDir "Interface\AddOns"
+$PatchName = "patch-G.MPQ"
 $Tmp    = Join-Path ([IO.Path]::GetTempPath()) ("grizzle-" + [Guid]::NewGuid())
 
 try {
@@ -26,11 +27,14 @@ try {
     $Dest = Join-Path $AddOns "grizzle"
     if (Test-Path $Dest) { Remove-Item -Recurse -Force $Dest }
     Copy-Item -Recurse -Path $Src.FullName -Destination $Dest
-    Write-Host "Grizzle addon is up to date."
+    # Client patch: WoW loads it on top of its own files. Deleting it puts the client back to stock.
+    $Patch = Join-Path $Src.Parent.FullName "client-patch\$PatchName"
+    if (Test-Path $Patch) { Copy-Item -Force -Path $Patch -Destination (Join-Path $WowDir "Data\$PatchName") }
+    Write-Host "Grizzle addon and client patch are up to date."
 }
 catch {
-    Write-Warning "Couldn't update the Grizzle addon: $($_.Exception.Message)"
-    Write-Warning "Starting WoW with the version you already have."
+    Write-Warning "Couldn't update the Grizzle addon or client patch: $($_.Exception.Message)"
+    Write-Warning "Starting WoW with what you already have."
     Start-Sleep -Seconds 3
 }
 finally {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Play Grizzle: updates the Grizzle addon from GitHub, then starts WoW.
+# Play Grizzle: updates the Grizzle addon and client patch from GitHub, then starts WoW.
 # Keep this in the WoW folder (next to Wow.exe). If the update fails, it starts WoW anyway.
 #
 # How WoW is started can be changed without editing this file, e.g.:
@@ -12,6 +12,7 @@ BRANCH="${GRIZZLE_BRANCH:-main}"
 
 WOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADDONS="$WOW_DIR/Interface/AddOns"
+PATCH="patch-G.MPQ"
 URL="https://github.com/$REPO/archive/refs/heads/$BRANCH.zip"
 
 update() {
@@ -32,14 +33,18 @@ update() {
     src="$(dirname "$(find "$tmp" -path '*/grizzle/grizzle.toc' | head -n1)")"
     [ -f "$src/grizzle.toc" ] || return 1
     # Grizzle: the folder's old name (WoW would load both)
-    mkdir -p "$ADDONS" && rm -rf "$ADDONS/Grizzle" "$ADDONS/grizzle" && cp -r "$src" "$ADDONS/grizzle"
+    mkdir -p "$ADDONS" && rm -rf "$ADDONS/Grizzle" "$ADDONS/grizzle" && cp -r "$src" "$ADDONS/grizzle" || return 1
+    # Client patch: WoW loads it on top of its own files. Deleting it puts the client back to stock.
+    if [ -f "$src/../client-patch/$PATCH" ]; then
+        cp "$src/../client-patch/$PATCH" "$WOW_DIR/Data/$PATCH" || return 1
+    fi
 }
 
 echo "Updating the Grizzle addon ($BRANCH)..."
 if update; then
-    echo "Grizzle addon is up to date."
+    echo "Grizzle addon and client patch are up to date."
 else
-    echo "WARNING: couldn't update the Grizzle addon; starting WoW with the version you already have." >&2
+    echo "WARNING: couldn't update the Grizzle addon or client patch; starting WoW with what you already have." >&2
     sleep 3
 fi
 
