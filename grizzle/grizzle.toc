@@ -3,5 +3,5 @@
 ## Notes: Custom tooltip overrides for cold system and campfire
 ## Version: 1.0
 
-Grizzle.lua
+grizzle.lua
 

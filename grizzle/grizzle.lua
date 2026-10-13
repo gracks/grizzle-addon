@@ -284,7 +284,7 @@ end
 local frame = CreateFrame("Frame");
 frame:RegisterEvent("ADDON_LOADED");
 frame:SetScript("OnEvent", function(self, event, addonName)
-    if event == "ADDON_LOADED" and addonName == "Grizzle" then
+    if event == "ADDON_LOADED" and addonName:lower() == "grizzle" then
         -- Hook GameTooltip:OnTooltipSetSpell for additional coverage
         GameTooltip:HookScript("OnTooltipSetSpell", function(self)
             local spellID = select(2, self:GetSpell());
