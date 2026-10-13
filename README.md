@@ -17,13 +17,12 @@ The client addon for the Grizzle WoW server, plus a launcher that keeps it up to
    a special Wine prefix, set it in the environment, e.g.
    `GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh`.
 
-Each time it runs, the launcher downloads the latest addon into `Interface/AddOns/grizzle` and the
-Grizzle client patch into `Data/patch-G.MPQ`, then starts WoW. If the download fails, it starts WoW
-with the versions you already have.
+Each time it runs, the launcher downloads the latest addon into `Interface/AddOns/grizzle` (and
+the Grizzle client patch into `Data/`, when there is one), then starts WoW. If the download fails,
+it starts WoW with the versions you already have.
 
-The client patch fixes things only the client can (for example, flight points of the other faction
-not showing on the flight map). It doesn't change any of WoW's own files: delete
-`Data/patch-G.MPQ` and the client is back to normal.
+There's no client patch at the moment. If you have a `Data/patch-G.MPQ` from an earlier version,
+you can delete it; it doesn't do anything.
 
 ## Testing (Test realm)
 
@@ -33,5 +32,4 @@ Go back to the normal launcher for the main realm; it puts the regular version b
 
 ## Manual install
 
-Copy the `grizzle` folder to `Interface/AddOns/` and `client-patch/patch-G.MPQ` to `Data/` in your
-WoW folder.
+Copy the `grizzle` folder to `Interface/AddOns/` in your WoW folder.
