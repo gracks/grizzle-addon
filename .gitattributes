@@ -1,3 +1,5 @@
 *.cmd eol=crlf
 *.ps1 eol=crlf
 *.sh  eol=lf
+*.MPQ binary
+*.mpq binary
