@@ -47,4 +47,7 @@ if (-not (Test-Path $Exe)) {
     Read-Host "Press Enter to close"
     exit 1
 }
+# Item cache: the server changes item stats, and the client shows its cached copy until this is gone.
+# WoW rebuilds it as you play.
+Remove-Item -Recurse -Force (Join-Path $WowDir "Cache\WDB") -ErrorAction SilentlyContinue
 Start-Process -FilePath $Exe -WorkingDirectory $WowDir

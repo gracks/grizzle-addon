@@ -48,6 +48,10 @@ else
     sleep 3
 fi
 
+# Item cache: the server changes item stats, and the client shows its cached copy until this is gone.
+# WoW rebuilds it as you play.
+rm -rf "$WOW_DIR/Cache/WDB"
+
 cd "$WOW_DIR" || exit 1
 if [ -n "$GRIZZLE_LAUNCH" ]; then
     exec bash -c "$GRIZZLE_LAUNCH"
