@@ -19,7 +19,7 @@ The client addon for the Grizzle WoW server, plus a launcher that keeps it up to
 
 Each time it runs, the launcher downloads the latest addon into `Interface/AddOns/grizzle` (and
 the Grizzle client patch into `Data/`, when there is one), then starts WoW. If the download fails,
-it starts WoW with the versions you already have.
+it starts WoW with the versions you already have. The launcher also updates itself the same way.
 
 There's no client patch at the moment. If you have a `Data/patch-G.MPQ` from an earlier version,
 you can delete it; it doesn't do anything.

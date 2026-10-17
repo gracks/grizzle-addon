@@ -17,6 +17,10 @@ Overrides the tooltip for the Biting Cold warning spell (ID: 38639) to clearly c
 
 This helps players understand that the warning is building up to a more severe debuff with actual gameplay consequences.
 
+### Quieter combat log
+Drenched, Snowbound and Sandblasted come and go on every mob in rain, snow or sandstorms. The
+combat log only reports them on players.
+
 ## Installation
 
 1. Copy the `grizzle` folder (containing `grizzle.toc` and `grizzle.lua`) to your World of Warcraft `Interface/AddOns/` directory.

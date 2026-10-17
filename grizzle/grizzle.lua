@@ -509,3 +509,33 @@ end);
 hooksecurefunc(GameTooltip, "SetUnitDebuff", function(self, unit, index, filter)
     AddMarkerText(self, select(11, UnitDebuff(unit, index, filter)));
 end);
+
+-- Weather markers (Drenched, Snowbound, Sandblasted) come and go on every mob in the weather, so
+-- the combat log only reports them on players. Wraps Blizzard_CombatLog's CombatLog_AddEvent
+-- (3.3.5: timestamp, event, srcGUID, srcName, srcFlags, dstGUID, dstName, dstFlags, spellId, ...).
+-- Switching combat log filters re-reads the log without this wrapper, so old lines can reappear then.
+local WEATHER_MARKERS = { [WET_SPELL_ID] = true, [90000] = true, [90001] = true };
+local MARKER_LOG_EVENTS = { SPELL_AURA_APPLIED = true, SPELL_AURA_REMOVED = true, SPELL_AURA_REFRESH = true };
+
+local function HookCombatLog()
+    if type(CombatLog_AddEvent) ~= "function" or CombatLog_AddEvent_Grizzle then return end
+    CombatLog_AddEvent_Grizzle = CombatLog_AddEvent;
+    CombatLog_AddEvent = function(...)
+        local _, event, _, _, _, _, _, dstFlags, spellId = ...;
+        if MARKER_LOG_EVENTS[event] and WEATHER_MARKERS[spellId]
+            and bit.band(dstFlags or 0, COMBATLOG_OBJECT_TYPE_PLAYER) == 0 then
+            return;
+        end
+        return CombatLog_AddEvent_Grizzle(...);
+    end
+end
+
+local combatLogFrame = CreateFrame("Frame");
+combatLogFrame:RegisterEvent("ADDON_LOADED");
+combatLogFrame:SetScript("OnEvent", function(self, event, addonName)
+    if addonName == "Blizzard_CombatLog" then
+        HookCombatLog();
+        self:UnregisterEvent("ADDON_LOADED");
+    end
+end);
+if IsAddOnLoaded("Blizzard_CombatLog") then HookCombatLog(); end

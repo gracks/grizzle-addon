@@ -6,6 +6,8 @@
 #   GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh
 #   WINEPREFIX=~/games/wow ./play-grizzle.sh
 # To get the addon being tested on the Test realm: GRIZZLE_BRANCH=test ./play-grizzle.sh
+# It updates itself: when the download has a newer play-grizzle.sh, it replaces this file and runs
+# the new one (GRIZZLE_UPDATED=1 stops that from repeating).
 
 REPO="gracks/grizzle-addon"   # GitHub owner/repo holding the addon
 BRANCH="${GRIZZLE_BRANCH:-main}"
@@ -14,6 +16,8 @@ WOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADDONS="$WOW_DIR/Interface/AddOns"
 PATCH="patch-G.MPQ"
 URL="https://github.com/$REPO/archive/refs/heads/$BRANCH.zip"
+SELF="$WOW_DIR/$(basename "${BASH_SOURCE[0]}")"
+RERUN=""
 
 update() {
     local tmp src
@@ -38,11 +42,21 @@ update() {
     if [ -f "$src/../client-patch/$PATCH" ]; then
         cp "$src/../client-patch/$PATCH" "$WOW_DIR/Data/$PATCH" || return 1
     fi
+    # Launcher: replace this script if the downloaded one differs and has no syntax errors. Written
+    # next to it and moved over it, because bash reads a running script as it goes.
+    local new="$src/../launcher/play-grizzle.sh"
+    if [ -z "$GRIZZLE_UPDATED" ] && [ -f "$new" ] && ! cmp -s "$new" "$SELF" && bash -n "$new"; then
+        cp "$new" "$SELF.new" && chmod +x "$SELF.new" && mv -f "$SELF.new" "$SELF" && RERUN=1
+    fi
 }
 
 echo "Updating the Grizzle addon ($BRANCH)..."
 if update; then
     echo "Grizzle addon and client patch are up to date."
+    if [ -n "$RERUN" ]; then
+        echo "Launcher updated."
+        GRIZZLE_UPDATED=1 exec "$SELF" "$@"
+    fi
 else
     echo "WARNING: couldn't update the Grizzle addon or client patch; starting WoW with what you already have." >&2
     sleep 3
