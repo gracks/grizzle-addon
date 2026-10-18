@@ -470,7 +470,9 @@ end);
 
 -- Grizzle's borrowed marker spells: the game's own tooltip text doesn't fit (or is missing), so
 -- replace it with what the marker actually does. The buff bar uses SetUnitAura; target and party
--- frames use SetUnitBuff / SetUnitDebuff.
+-- frames use SetUnitBuff / SetUnitDebuff. mobOld / mobText: the same for auras on mobs, whose
+-- weather markers do different things (they shorten the mob's aggro range; build-client-patch.py
+-- has the player wording).
 local MARKER_TEXT = {
     [WET_SPELL_ID] = {   -- Drenched (Wet.SpellId)
         old = "Drenched!",
@@ -480,34 +482,47 @@ local MARKER_TEXT = {
         old = "Movement speed increased.",
         text = "Warming up by the fire. Stay seated until this runs out to get Cozy Fire.",
     },
+    [90000] = {          -- Snowbound (Snowbound.SpellId)
+        mobOld = "Deep snow slows movement, attacks, and casting.",
+        mobText = "Deep snow slows movement, attacks, and casting. Shortens how far enemies are noticed.",
+    },
+    [90001] = {          -- Sandblasted (Sandblasted.SpellId)
+        mobOld = "Blowing sand makes attacks and spells against distant targets miss more often. Mana regenerates more slowly unless sitting.",
+        mobText = "Blowing sand makes attacks and spells against distant targets miss more often. Shortens how far enemies are noticed.",
+    },
     -- Cozy Fire (CampfireRest.SpellId) is handled by ModifyWarmthTooltip above
 };
 
-local function AddMarkerText(tooltip, spellId)
+local function AddMarkerText(tooltip, unit, spellId)
     local marker = spellId and MARKER_TEXT[spellId];
     if not marker then return end
-    if marker.old then
+    local old, text = marker.old, marker.text;
+    if marker.mobText and not UnitIsPlayer(unit) then
+        old, text = marker.mobOld, marker.mobText;
+    end
+    if not text then return end
+    if old then
         for i = 2, tooltip:NumLines() do
             local line = _G["GameTooltipTextLeft" .. i];
-            if line and line:GetText() == marker.old then
-                line:SetText(marker.text);
+            if line and line:GetText() == old then
+                line:SetText(text);
                 tooltip:Show();
                 return;
             end
         end
     end
-    tooltip:AddLine(marker.text, 1, 0.82, 0, true);
+    tooltip:AddLine(text, 1, 0.82, 0, true);
     tooltip:Show();
 end
 
 hooksecurefunc(GameTooltip, "SetUnitAura", function(self, unit, index, filter)
-    AddMarkerText(self, select(11, UnitAura(unit, index, filter)));
+    AddMarkerText(self, unit, select(11, UnitAura(unit, index, filter)));
 end);
 hooksecurefunc(GameTooltip, "SetUnitBuff", function(self, unit, index, filter)
-    AddMarkerText(self, select(11, UnitBuff(unit, index, filter)));
+    AddMarkerText(self, unit, select(11, UnitBuff(unit, index, filter)));
 end);
 hooksecurefunc(GameTooltip, "SetUnitDebuff", function(self, unit, index, filter)
-    AddMarkerText(self, select(11, UnitDebuff(unit, index, filter)));
+    AddMarkerText(self, unit, select(11, UnitDebuff(unit, index, filter)));
 end);
 
 -- Weather markers (Drenched, Snowbound, Sandblasted) come and go on every mob in the weather, so
