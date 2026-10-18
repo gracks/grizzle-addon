@@ -21,6 +21,12 @@ This helps players understand that the warning is building up to a more severe d
 Drenched, Snowbound and Sandblasted come and go on every mob in rain, snow or sandstorms. The
 combat log only reports them on players.
 
+### No town tracking
+The minimap tracking menu only lists tracking spells the character knows (Find Herbs, Find
+Minerals, Hunter tracks). Banker, mailbox, trainers, flight master and the other town entries are
+removed and switched off at login: find them in the world or ask a guard. The button is hidden
+while a character knows no tracking spell.
+
 ## Installation
 
 1. Copy the `grizzle` folder (containing `grizzle.toc` and `grizzle.lua`) to your World of Warcraft `Interface/AddOns/` directory.

@@ -539,3 +539,91 @@ combatLogFrame:SetScript("OnEvent", function(self, event, addonName)
     end
 end);
 if IsAddOnLoaded("Blizzard_CombatLog") then HookCombatLog(); end
+
+-- Minimap tracking: only tracking spells you know (Find Herbs, Find Minerals, Hunter tracks...).
+-- Town tracking (banker, mailbox, trainers, flight master...) is gone: players find those in the
+-- world or ask a guard. GetTrackingInfo marks spells "spell" and town entries "other".
+local SetTracking_Blizzard = SetTracking;
+
+local function IsTownTracking(id)
+    local _, _, _, category = GetTrackingInfo(id);
+    return category ~= "spell";
+end
+
+SetTracking = function(id, ...)
+    if IsTownTracking(id) then
+        return;
+    end
+    return SetTracking_Blizzard(id, ...);
+end
+
+local function ToggleTracking(self, id)
+    local _, _, active = GetTrackingInfo(id);
+    SetTracking(id, not active);
+end
+
+local function MiniMapTrackingDropDown_Initialize_Grizzle()
+    local info = UIDropDownMenu_CreateInfo();
+    local anyActive = false;
+    for id = 1, GetNumTrackingTypes() do
+        local _, _, active = GetTrackingInfo(id);
+        if active and not IsTownTracking(id) then
+            anyActive = true;
+        end
+    end
+    info.text = NONE;
+    info.checked = not anyActive;
+    info.func = ClearAllTracking;
+    info.isNotRadio = true;
+    info.keepShownOnClick = true;
+    UIDropDownMenu_AddButton(info);
+
+    for id = 1, GetNumTrackingTypes() do
+        if not IsTownTracking(id) then
+            local name, texture, active = GetTrackingInfo(id);
+            info = UIDropDownMenu_CreateInfo();
+            info.text = name;
+            info.checked = active;
+            info.func = ToggleTracking;
+            info.icon = texture;
+            info.arg1 = id;
+            info.isNotRadio = true;
+            info.tCoordLeft = 0.0625;
+            info.tCoordRight = 0.9;
+            info.tCoordTop = 0.0625;
+            info.tCoordBottom = 0.9;
+            info.keepShownOnClick = true;
+            UIDropDownMenu_AddButton(info);
+        end
+    end
+end
+
+-- Switch off any town tracking still on (saved from before, or set some other way), and hide the
+-- button while the character knows no tracking spell.
+local function UpdateTracking()
+    local anySpell = false;
+    for id = 1, GetNumTrackingTypes() do
+        local _, _, active = GetTrackingInfo(id);
+        if IsTownTracking(id) then
+            if active then
+                SetTracking_Blizzard(id, false);
+            end
+        else
+            anySpell = true;
+        end
+    end
+    if anySpell then
+        MiniMapTracking:Show();
+    else
+        MiniMapTracking:Hide();
+    end
+end
+
+MiniMapTrackingDropDown_Initialize = MiniMapTrackingDropDown_Initialize_Grizzle;
+MiniMapTrackingDropDown.initialize = MiniMapTrackingDropDown_Initialize_Grizzle;
+
+local trackingFrame = CreateFrame("Frame");
+trackingFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
+trackingFrame:RegisterEvent("MINIMAP_UPDATE_TRACKING");
+trackingFrame:RegisterEvent("SPELLS_CHANGED");
+trackingFrame:SetScript("OnEvent", UpdateTracking);
