@@ -2,7 +2,9 @@
 ## Title: Grizzle
 ## Notes: Custom tooltip overrides for cold system and campfire
 ## Version: 1.0
+## SavedVariablesPerCharacter: GrizzleTombstone
 
 grizzle.lua
 travel.lua
+death.lua
 
