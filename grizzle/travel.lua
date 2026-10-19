@@ -47,6 +47,33 @@ minimapFrame:SetScript("OnEvent", function(self, event, name)
     end
 end);
 
+-- the buffs sat left of the minimap; move them right, up to the clock. Blizzard re-places them
+-- (UIParent_UpdateTopFramePositions), so this runs after it and remembers where it put each frame.
+local BUFF_SHIFT = 70;      -- pixels to the right
+
+local function ShiftBuffs()
+    for _, name in ipairs({ "ConsolidatedBuffs", "BuffFrame", "TemporaryEnchantFrame" }) do
+        local frame = _G[name];
+        local relativeTo = frame and select(2, frame:GetPoint(1));
+        -- only frames Blizzard anchors to the screen or the minimap (the rest follow them), and only once per placing
+        if relativeTo == UIParent or relativeTo == MinimapCluster then
+            local right, top = frame:GetRight(), frame:GetTop();
+            if right and top and (not frame.grizzleRight or math.abs(frame.grizzleRight - right) > 0.5) then
+                frame:ClearAllPoints();
+                frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", right - UIParent:GetRight() + BUFF_SHIFT, top - UIParent:GetTop());
+                frame.grizzleRight = right + BUFF_SHIFT;
+            end
+        end
+    end
+end
+
+if UIParent_UpdateTopFramePositions then
+    hooksecurefunc("UIParent_UpdateTopFramePositions", ShiftBuffs);
+end
+local buffFrame = CreateFrame("Frame");
+buffFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
+buffFrame:SetScript("OnEvent", ShiftBuffs);
+
 -- the zone map (Shift-M) is a minimap too
 ToggleBattlefieldMinimap = function() end;
 
