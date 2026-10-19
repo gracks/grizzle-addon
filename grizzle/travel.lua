@@ -135,9 +135,11 @@ mark:SetPoint("BOTTOM", compass, "BOTTOM", 0, 0);
 
 local labels = {};
 for bearing, text in pairs(POINTS) do
-    -- N/E/S/W yellow and a size up; the diagonals smaller and white (GameFontHighlightSmall drew them bigger)
+    -- N/E/S/W yellow at 13, the diagonals white at 9 (the stock font objects are too close in size to tell apart)
     local cardinal = bearing % 90 == 0;
-    local label = compass:CreateFontString(nil, "OVERLAY", cardinal and "GameFontNormal" or "GameFontNormalSmall");
+    local label = compass:CreateFontString(nil, "OVERLAY", "GameFontNormal");
+    local font, _, flags = label:GetFont();
+    label:SetFont(font, cardinal and 13 or 9, flags);
     label:SetText(text);
     if not cardinal then
         label:SetTextColor(1, 1, 1);
