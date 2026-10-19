@@ -38,19 +38,34 @@ local function UpdateBar()
     shade:Show();
 end
 
-MainMenuExpBar:HookScript("OnEnter", function(self)
+-- The stock tooltip is rebuilt about once a second by ExhaustionToolTipText (ExhaustionTick's
+-- OnUpdate), which drops added lines, so the line is added again after each rebuild.
+local function AddTombstoneLine()
     local stone = GrizzleTombstone;
     local max = UnitXPMax("player");
     if not stone or not max or max == 0 then
         return;
     end
-    if not GameTooltip:IsOwned(self) then
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
-    end
     local pct = math.floor(stone.xp * 100 / max + 0.5);
     GameTooltip:AddLine(pct .. "% of a level lingers at your tombstone (" .. stone.zone .. ")",
         SILVER_R, SILVER_G, SILVER_B, true);
     GameTooltip:Show();
+end
+
+MainMenuExpBar:HookScript("OnEnter", function(self)
+    if not GrizzleTombstone then
+        return;
+    end
+    if not GameTooltip:IsOwned(self) then
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+    end
+    AddTombstoneLine();
+end);
+
+hooksecurefunc("ExhaustionToolTipText", function()
+    if GameTooltip:IsOwned(MainMenuExpBar) or GameTooltip:IsOwned(ExhaustionTick) then
+        AddTombstoneLine();
+    end
 end);
 
 -- --- world map pin ---------------------------------------------------------------------------
@@ -61,7 +76,7 @@ pin:SetFrameLevel(WorldMapButton:GetFrameLevel() + 5);
 pin:EnableMouse(true);
 local pinTexture = pin:CreateTexture(nil, "OVERLAY");
 pinTexture:SetAllPoints();
-pinTexture:SetTexture("Interface\\WorldMap\\GravePicture-Group");
+pinTexture:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull");
 pinTexture:SetVertexColor(SILVER_R, SILVER_G, SILVER_B);
 pin:SetScript("OnEnter", function(self)
     WorldMapTooltip:SetOwner(self, "ANCHOR_RIGHT");
@@ -90,6 +105,10 @@ local function UpdatePin()
         stone.x / 100 * WorldMapButton:GetWidth(), -stone.y / 100 * WorldMapButton:GetHeight());
     pin:Show();
 end
+
+-- WORLD_MAP_UPDATE alone missed opening the map on the zone it already showed.
+hooksecurefunc("WorldMapFrame_Update", UpdatePin);
+WorldMapFrame:HookScript("OnShow", UpdatePin);
 
 -- --- server messages -------------------------------------------------------------------------
 
