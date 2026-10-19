@@ -58,9 +58,15 @@ local function HideIfShown(frame)
     end
 end
 
+-- nor the ping that marks you when the map opens
+if WorldMapFrame_PingPlayerPosition then
+    WorldMapFrame_PingPlayerPosition = function() end;
+end
+
 -- runs after Blizzard's WorldMapButton_OnUpdate has placed them
 WorldMapButton:HookScript("OnUpdate", function()
     HideIfShown(WorldMapPlayer);
+    HideIfShown(WorldMapPing);
     if ShowWorldMapArrowFrame then
         ShowWorldMapArrowFrame(nil);
     end
