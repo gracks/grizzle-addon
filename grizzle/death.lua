@@ -71,13 +71,12 @@ end);
 -- --- world map pin ---------------------------------------------------------------------------
 
 local pin = CreateFrame("Frame", "GrizzleTombstonePin", WorldMapButton);
-pin:SetSize(20, 20);
+pin:SetSize(16, 16);
 pin:SetFrameLevel(WorldMapButton:GetFrameLevel() + 5);
 pin:EnableMouse(true);
 local pinTexture = pin:CreateTexture(nil, "OVERLAY");
 pinTexture:SetAllPoints();
-pinTexture:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull");
-pinTexture:SetVertexColor(SILVER_R, SILVER_G, SILVER_B);
+pinTexture:SetTexture("Interface\\WorldMap\\WorldMapCorpse");   -- the stock corpse tombstone
 pin:SetScript("OnEnter", function(self)
     WorldMapTooltip:SetOwner(self, "ANCHOR_RIGHT");
     WorldMapTooltip:SetText("Your tombstone", SILVER_R, SILVER_G, SILVER_B);
