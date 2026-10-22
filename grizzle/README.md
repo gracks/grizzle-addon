@@ -21,6 +21,19 @@ This helps players understand that the warning is building up to a more severe d
 Drenched, Snowbound and Sandblasted come and go on every mob in rain, snow or sandstorms. The
 combat log only reports them on players.
 
+### No town tracking
+The minimap tracking menu only lists tracking spells the character knows (Find Herbs, Find
+Minerals, Hunter tracks). Banker, mailbox, trainers, flight master and the other town entries are
+removed and switched off at login: find them in the world or ask a guard. The button is hidden
+while a character knows no tracking spell.
+
+### No minimap, no map arrows, a compass (travel.lua)
+The minimap and the zone map (Shift-M) are gone, and the world map shows no arrow (or opening ping) for you or your
+party: you find your way by looking at the world. The day/night and calendar button, the clock,
+the mail indicator and the PvP queue button move to the top right corner. A small compass at the
+top of the screen shows which way you face. The Dungeon Finder button is hidden (it's off on the
+server).
+
 ## Installation
 
 1. Copy the `grizzle` folder (containing `grizzle.toc` and `grizzle.lua`) to your World of Warcraft `Interface/AddOns/` directory.

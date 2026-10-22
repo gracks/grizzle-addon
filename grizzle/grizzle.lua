@@ -1,12 +1,12 @@
 -- Grizzle Addon
--- Custom tooltip overrides for cold system spells and Bright Campfire
+-- Custom tooltip overrides for cold system spells and Basic Campfire
 
 -- Spell IDs (from worldserver.conf)
-local CAMPFIRE_SPELL_ID = 25085;  -- Bright Campfire (ColdSystem.CampfireSpellId)
+local CAMPFIRE_SPELL_ID = 818;    -- Basic Campfire (ColdSystem.CampfireSpellId)
 local WARNING_SPELL_ID = 38639;   -- Biting Cold warning (ColdSystem.WarningSpellId)
 local COLD_SPELL_ID = 68510;      -- Penetrating Cold (ColdSystem.ColdSpellId)
 local WARMTH_SPELL_ID = 7358;     -- Cozy Fire: the campfire rest buff (CampfireRest.SpellId)
-local REST_TEXT = "Rested by a campfire: +15% health, +3% critical strike chance, and faster health and mana regeneration out of combat.";
+local REST_TEXT = "Spirit increased by 8. Rain takes 5 min to drench you, and you dry off in 15 sec.";
 local WET_SPELL_ID = 61870;       -- Drenched (Wet.SpellId)
 
 -- Global tooltip scanner - runs on every frame to catch any tooltip
@@ -53,33 +53,7 @@ end);
 
 -- Campfire values (from worldserver.conf)
 local CAMPFIRE_CAST_TIME = 5;     -- Cast time in seconds (ColdSystem.CampfireCastTime = 5000ms)
-local CAMPFIRE_COOLDOWN = 15;     -- Cooldown in minutes (ColdSystem.CampfireCooldown = 900000ms)
-local REAGENT_ITEM_ID = 4470;    -- Simple Wood (item ID)
-local REAGENT_QUANTITY = 1;       -- Quantity required
-
--- Function to get item name from item ID
--- Simple Wood (4470) is a common crafting material
-local function GetItemName(itemID)
-    if itemID == 4470 then
-        -- Try to get item info (may return nil if not loaded yet)
-        local itemName, itemLink = GetItemInfo(itemID);
-        if itemName then
-            return itemName;
-        end
-        if itemLink then
-            -- Extract item name from item link (format: |cff...|Hitem:ID:...|h[Name]|h|r)
-            local name = string.match(itemLink, "%[(.-)%]");
-            if name then
-                return name;
-            end
-        end
-        -- Fallback - Simple Wood is the common name for item 4470
-        return "Simple Wood";
-    end
-    -- For other items, try GetItemInfo
-    local itemName = GetItemInfo(itemID);
-    return itemName or "Item " .. itemID;
-end
+local CAMPFIRE_COOLDOWN = 5;      -- Cooldown in minutes (ColdSystem.CampfireCooldown = 300000ms)
 
 -- Function to modify campfire tooltip
 local function ModifyCampfireTooltip()
@@ -90,9 +64,6 @@ local function ModifyCampfireTooltip()
     
     local numLines = GameTooltip:NumLines();
     local modified = false;
-    
-    -- Simple, direct reagent text - always use plain text for maximum compatibility
-    local reagentText = "Requires: Simple Wood";
     
     -- First pass: modify existing lines
     for i = 1, numLines do
@@ -119,12 +90,6 @@ local function ModifyCampfireTooltip()
             end
         end
     end
-    
-    -- ALWAYS add reagent line at the end - don't check if it exists, just add it
-    -- This ensures it's always visible
-    GameTooltip:AddLine(" ");
-    GameTooltip:AddLine(reagentText, 1, 0.82, 0, true);  -- Gold color like other requirements
-    modified = true;
     
     if modified then
         GameTooltip:Show();
@@ -206,7 +171,7 @@ local function ModifyColdTooltip()
     GameTooltip:Show();
 end
 
--- Function to override the Cozy Fire tooltip (campfire rest buff; it says "Increases Spirit by 7", which is switched off)
+-- Function to override the Cozy Fire tooltip (campfire rest buff: adds what it does to Drenched)
 local function ModifyWarmthTooltip()
     local numLines = GameTooltip:NumLines();
     local foundDescription = false;
@@ -470,44 +435,55 @@ end);
 
 -- Grizzle's borrowed marker spells: the game's own tooltip text doesn't fit (or is missing), so
 -- replace it with what the marker actually does. The buff bar uses SetUnitAura; target and party
--- frames use SetUnitBuff / SetUnitDebuff.
+-- frames use SetUnitBuff / SetUnitDebuff. mobOld / mobText: the same for auras on mobs, whose
+-- weather markers do different things (they shorten the mob's aggro range; build-client-patch.py
+-- has the player wording).
 local MARKER_TEXT = {
     [WET_SPELL_ID] = {   -- Drenched (Wet.SpellId)
         old = "Drenched!",
         text = "Fire hurts you less; frost and nature hurt you more. Slower health regen while standing. Dry off indoors or by a fire.",
     },
-    [56489] = {          -- Warming Up (CampfireRest.WarmingSpellId)
-        old = "Movement speed increased.",
-        text = "Warming up by the fire. Stay seated until this runs out to get Cozy Fire.",
+    [90000] = {          -- Snowbound (Snowbound.SpellId)
+        mobOld = "Deep snow slows movement, attacks, and casting.",
+        mobText = "Deep snow slows movement, attacks, and casting. Shortens how far enemies are noticed.",
+    },
+    [90001] = {          -- Sandblasted (Sandblasted.SpellId)
+        mobOld = "Blowing sand makes attacks and spells against distant targets miss more often. Mana regenerates more slowly unless sitting.",
+        mobText = "Blowing sand makes attacks and spells against distant targets miss more often. Shortens how far enemies are noticed.",
     },
     -- Cozy Fire (CampfireRest.SpellId) is handled by ModifyWarmthTooltip above
 };
 
-local function AddMarkerText(tooltip, spellId)
+local function AddMarkerText(tooltip, unit, spellId)
     local marker = spellId and MARKER_TEXT[spellId];
     if not marker then return end
-    if marker.old then
+    local old, text = marker.old, marker.text;
+    if marker.mobText and not UnitIsPlayer(unit) then
+        old, text = marker.mobOld, marker.mobText;
+    end
+    if not text then return end
+    if old then
         for i = 2, tooltip:NumLines() do
             local line = _G["GameTooltipTextLeft" .. i];
-            if line and line:GetText() == marker.old then
-                line:SetText(marker.text);
+            if line and line:GetText() == old then
+                line:SetText(text);
                 tooltip:Show();
                 return;
             end
         end
     end
-    tooltip:AddLine(marker.text, 1, 0.82, 0, true);
+    tooltip:AddLine(text, 1, 0.82, 0, true);
     tooltip:Show();
 end
 
 hooksecurefunc(GameTooltip, "SetUnitAura", function(self, unit, index, filter)
-    AddMarkerText(self, select(11, UnitAura(unit, index, filter)));
+    AddMarkerText(self, unit, select(11, UnitAura(unit, index, filter)));
 end);
 hooksecurefunc(GameTooltip, "SetUnitBuff", function(self, unit, index, filter)
-    AddMarkerText(self, select(11, UnitBuff(unit, index, filter)));
+    AddMarkerText(self, unit, select(11, UnitBuff(unit, index, filter)));
 end);
 hooksecurefunc(GameTooltip, "SetUnitDebuff", function(self, unit, index, filter)
-    AddMarkerText(self, select(11, UnitDebuff(unit, index, filter)));
+    AddMarkerText(self, unit, select(11, UnitDebuff(unit, index, filter)));
 end);
 
 -- Weather markers (Drenched, Snowbound, Sandblasted) come and go on every mob in the weather, so
@@ -539,3 +515,91 @@ combatLogFrame:SetScript("OnEvent", function(self, event, addonName)
     end
 end);
 if IsAddOnLoaded("Blizzard_CombatLog") then HookCombatLog(); end
+
+-- Minimap tracking: only tracking spells you know (Find Herbs, Find Minerals, Hunter tracks...).
+-- Town tracking (banker, mailbox, trainers, flight master...) is gone: players find those in the
+-- world or ask a guard. GetTrackingInfo marks spells "spell" and town entries "other".
+local SetTracking_Blizzard = SetTracking;
+
+local function IsTownTracking(id)
+    local _, _, _, category = GetTrackingInfo(id);
+    return category ~= "spell";
+end
+
+SetTracking = function(id, ...)
+    if IsTownTracking(id) then
+        return;
+    end
+    return SetTracking_Blizzard(id, ...);
+end
+
+local function ToggleTracking(self, id)
+    local _, _, active = GetTrackingInfo(id);
+    SetTracking(id, not active);
+end
+
+local function MiniMapTrackingDropDown_Initialize_Grizzle()
+    local info = UIDropDownMenu_CreateInfo();
+    local anyActive = false;
+    for id = 1, GetNumTrackingTypes() do
+        local _, _, active = GetTrackingInfo(id);
+        if active and not IsTownTracking(id) then
+            anyActive = true;
+        end
+    end
+    info.text = NONE;
+    info.checked = not anyActive;
+    info.func = ClearAllTracking;
+    info.isNotRadio = true;
+    info.keepShownOnClick = true;
+    UIDropDownMenu_AddButton(info);
+
+    for id = 1, GetNumTrackingTypes() do
+        if not IsTownTracking(id) then
+            local name, texture, active = GetTrackingInfo(id);
+            info = UIDropDownMenu_CreateInfo();
+            info.text = name;
+            info.checked = active;
+            info.func = ToggleTracking;
+            info.icon = texture;
+            info.arg1 = id;
+            info.isNotRadio = true;
+            info.tCoordLeft = 0.0625;
+            info.tCoordRight = 0.9;
+            info.tCoordTop = 0.0625;
+            info.tCoordBottom = 0.9;
+            info.keepShownOnClick = true;
+            UIDropDownMenu_AddButton(info);
+        end
+    end
+end
+
+-- Switch off any town tracking still on (saved from before, or set some other way), and hide the
+-- button while the character knows no tracking spell.
+local function UpdateTracking()
+    local anySpell = false;
+    for id = 1, GetNumTrackingTypes() do
+        local _, _, active = GetTrackingInfo(id);
+        if IsTownTracking(id) then
+            if active then
+                SetTracking_Blizzard(id, false);
+            end
+        else
+            anySpell = true;
+        end
+    end
+    if anySpell then
+        MiniMapTracking:Show();
+    else
+        MiniMapTracking:Hide();
+    end
+end
+
+MiniMapTrackingDropDown_Initialize = MiniMapTrackingDropDown_Initialize_Grizzle;
+MiniMapTrackingDropDown.initialize = MiniMapTrackingDropDown_Initialize_Grizzle;
+
+local trackingFrame = CreateFrame("Frame");
+trackingFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
+trackingFrame:RegisterEvent("MINIMAP_UPDATE_TRACKING");
+trackingFrame:RegisterEvent("SPELLS_CHANGED");
+trackingFrame:SetScript("OnEvent", UpdateTracking);
