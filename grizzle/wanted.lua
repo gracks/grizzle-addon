@@ -1,5 +1,5 @@
 -- Grizzle wanted lists (doc/grizzle/wanted.md): while a merchant with a wanted list has its shop open, the items it
--- wants say so in their tooltips, with what each one fetches there and whether selling it still pays XP. The server
+-- wants say so in their tooltips, naming the merchant and whether selling still pays XP. The server
 -- sends the list in an addon whisper "GRZ_WANTED" <item>:<copper each>:<1 if selling pays XP, else 0>, tab-separated,
 -- when the shop opens and after each wanted sale or buyback.
 
@@ -16,10 +16,8 @@ local function AddWantedLines(tooltip)
     if not item then
         return;
     end
-    tooltip:AddLine("Wanted here: fetches " .. GetCoinTextureString(item.price) .. " apiece", 0.1, 1, 0.1);
-    if item.xp then
-        tooltip:AddLine("Experience to be gained", 0.1, 1, 0.1);
-    end
+    local earns = item.xp and "Earns a higher price and some experience." or "Earns a higher price.";
+    tooltip:AddLine("Wanted by " .. (UnitName("npc") or "this merchant") .. ". " .. earns, 0.1, 1, 0.1, true);
     tooltip:Show();
 end
 
