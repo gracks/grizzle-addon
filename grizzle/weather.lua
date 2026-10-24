@@ -36,6 +36,9 @@ local frostHeavy = Layer("frost_heavy", 0.07);
 local mistLight = Layer("mist_light", 0.15);
 local mistHeavy = Layer("mist_heavy", 0.12);
 
+local MIST = 0.5;         -- overall strength of the rain mist
+local STORM_MIST = 0.6;   -- a thunderstorm's mist, as a share of heavy rain's: its dark rim should show through
+
 local kind, grade = "", 0;
 
 local function Ramp(t, from, to)
@@ -71,18 +74,20 @@ local function SetTargets()
         frostLight.target = 0.5 + 0.5 * t;
         frostHeavy.target = Ramp(t, 0.3, 1);
     elseif kind == "rain" or kind == "storm" then
+        local mist = MIST;
         if kind == "storm" then
             t = 1;
+            mist = MIST * STORM_MIST;
             stormVignette.target = 1;
             stormRim.target = 0.8;
         end
-        mistLight.target = 0.5 + 0.5 * t;
-        mistHeavy.target = Ramp(t, 0.3, 1) * 0.85;
+        mistLight.target = mist * (0.5 + 0.5 * t);
+        mistHeavy.target = mist * Ramp(t, 0.3, 1) * 0.85;
     elseif kind == "sand" then
         sandHaze.target = 0.35 + 0.55 * t;
     else
-        -- the mist lingers while Drenched dries off
-        mistLight.target = 0.6 * Drying();
+        -- the mist lingers for the first half of Drenched drying off (Drenched is your clothes, the mist your view)
+        mistLight.target = MIST * 0.6 * Ramp(Drying(), 0.5, 1);
     end
 end
 
