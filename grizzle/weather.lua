@@ -3,7 +3,7 @@
 -- (the world's own rain and blowing sand do the rest). The heavier the weather, the stronger and further in it
 -- reaches. The server sends the weather the player is out in (outdoors, alive, once it has arrived) in an addon
 -- whisper "GRZ_WEATHER" <rain|storm|snow|sand, or empty>\t<grade 0-100>, when it changes and every 30s anyway.
--- After the rain, the mist fades while Drenched dries off. The overlay hangs off the game world, not the UI,
+-- After the rain, the mist clears in the first seconds of Drenched drying off. The overlay hangs off the game world, not the UI,
 -- so hiding the UI (Alt-Z) keeps it.
 
 local PREFIX = "GRZ_WEATHER";
@@ -37,7 +37,9 @@ local mistLight = Layer("mist_light", 0.15);
 local mistHeavy = Layer("mist_heavy", 0.12);
 
 local MIST = 0.5;         -- overall strength of the rain mist
-local STORM_MIST = 0.6;   -- a thunderstorm's mist, as a share of heavy rain's: its dark rim should show through
+local STORM_MIST = 0.18;  -- a thunderstorm's mist, lighter than heavy rain's so its dark rim shows through
+local STORM_DARK = 0.6;   -- strength of a thunderstorm's dark rim and corners
+local MIST_CLEAR = 9;     -- seconds the mist takes to clear once you start drying off
 
 local kind, grade = "", 0;
 
@@ -45,8 +47,8 @@ local function Ramp(t, from, to)
     return math.max(0, math.min(1, (t - from) / (to - from)));
 end
 
--- how far Drenched has left to dry (1 just out of the rain, 0 dry), or 0 while it has no timer (still soaking)
-local function Drying()
+-- seconds since Drenched started drying off, or nil while it has no timer (still soaking) or you're dry
+local function Dried()
     for _, filter in ipairs({ "HARMFUL", "HELPFUL" }) do
         for i = 1, 40 do
             local name, _, _, _, _, duration, expirationTime, _, _, _, spellId = UnitAura("player", i, filter);
@@ -55,13 +57,13 @@ local function Drying()
             end
             if spellId == WET_SPELL_ID then
                 if duration and duration > 0 and expirationTime then
-                    return math.max(0, math.min(1, (expirationTime - GetTime()) / duration));
+                    return GetTime() - (expirationTime - duration);
                 end
-                return 0;
+                return nil;
             end
         end
     end
-    return 0;
+    return nil;
 end
 
 local function SetTargets()
@@ -73,21 +75,22 @@ local function SetTargets()
     if kind == "snow" then
         frostLight.target = 0.5 + 0.5 * t;
         frostHeavy.target = Ramp(t, 0.3, 1);
-    elseif kind == "rain" or kind == "storm" then
-        local mist = MIST;
-        if kind == "storm" then
-            t = 1;
-            mist = MIST * STORM_MIST;
-            stormVignette.target = 1;
-            stormRim.target = 0.8;
-        end
-        mistLight.target = mist * (0.5 + 0.5 * t);
-        mistHeavy.target = mist * Ramp(t, 0.3, 1) * 0.85;
+    elseif kind == "rain" then
+        mistLight.target = MIST * (0.5 + 0.2 * t);
+        mistHeavy.target = MIST * Ramp(t, 0.3, 1) * 0.6;
+    elseif kind == "storm" then
+        stormVignette.target = STORM_DARK;
+        stormRim.target = 0.8 * STORM_DARK;
+        mistLight.target = STORM_MIST;
+        mistHeavy.target = STORM_MIST * 0.85;
     elseif kind == "sand" then
         sandHaze.target = 0.35 + 0.55 * t;
     else
-        -- the mist lingers for the first half of Drenched drying off (Drenched is your clothes, the mist your view)
-        mistLight.target = MIST * 0.6 * Ramp(Drying(), 0.5, 1);
+        -- the mist lingers briefly as Drenched starts drying off (Drenched is your clothes, the mist your view)
+        local dried = Dried();
+        if dried then
+            mistLight.target = MIST * 0.6 * (1 - Ramp(dried, 0, MIST_CLEAR));
+        end
     end
 end
 
