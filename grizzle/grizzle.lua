@@ -441,7 +441,7 @@ end);
 local MARKER_TEXT = {
     [WET_SPELL_ID] = {   -- Drenched (Wet.SpellId)
         old = "Drenched!",
-        text = "Fire hurts you less; frost and nature hurt you more. Slower health regen while standing. Dry off indoors or by a fire.",
+        text = "Fire hurts you less; frost hurts you more. Slower health and mana regen. Dry off indoors or by a fire.",
     },
     [90000] = {          -- Snowbound (Snowbound.SpellId)
         mobOld = "Deep snow slows movement, attacks, and casting.",
