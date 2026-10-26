@@ -141,12 +141,12 @@ events:SetScript("OnEvent", function(self, event, prefix, message, channel)
     SetTargets();
 end);
 
--- the client's own clouds (zones without the painted sky, doc/grizzle/sky.md) are blocky below their highest detail,
--- so at login skyCloudLOD is raised to it (3)
+-- skyCloudLOD stays at 0: at 3 the clouds are smoother but some zones' (Westfall's) turn dark grey. The addon
+-- raised it to 3 for a while (doc/grizzle/sky.md), so at login it's put back
 local sky = CreateFrame("Frame");
 sky:RegisterEvent("PLAYER_LOGIN");
 sky:SetScript("OnEvent", function()
-    if (tonumber(GetCVar("skyCloudLOD")) or 0) < 3 then
-        SetCVar("skyCloudLOD", 3);
+    if (tonumber(GetCVar("skyCloudLOD")) or 0) ~= 0 then
+        SetCVar("skyCloudLOD", 0);
     end
 end);
