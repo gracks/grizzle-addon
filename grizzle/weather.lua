@@ -140,3 +140,13 @@ events:SetScript("OnEvent", function(self, event, prefix, message, channel)
     grade = (tonumber(newGrade) or 0) / 100;
     SetTargets();
 end);
+
+-- the client's own clouds (zones without the painted sky, doc/grizzle/sky.md) are blocky below their highest detail,
+-- so at login skyCloudLOD is raised to it (3)
+local sky = CreateFrame("Frame");
+sky:RegisterEvent("PLAYER_LOGIN");
+sky:SetScript("OnEvent", function()
+    if (tonumber(GetCVar("skyCloudLOD")) or 0) < 3 then
+        SetCVar("skyCloudLOD", 3);
+    end
+end);
