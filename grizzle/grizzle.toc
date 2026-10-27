@@ -7,4 +7,6 @@
 grizzle.lua
 travel.lua
 death.lua
-
+wanted.lua
+weather.lua
+food.lua

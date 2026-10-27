@@ -1,13 +1,18 @@
 -- Grizzle death (doc/grizzle/death.md): releasing leaves part of your soul in a tombstone where you
 -- fell. No buff marks it; the world map shows a pin at your tombstone, and the XP bar shades the XP
 -- it holds, past your current XP, in a pale spectral silver-white. The server says where it is in an
--- addon whisper "GRZ_TOMB" <zone>\t<x>\t<y>\t<xp> (x, y 0-100 on the zone's map), or an empty one
--- for none, after login and on each release and reclaim. Kept per character for /reload.
+-- addon whisper "GRZ_TOMB" <zone>\t<x>\t<y>\t<xp>[\tshade] (x, y 0-100 on the zone's map; "shade" when
+-- Death.Shades shows it as your shade), or an empty one for none, after login and on each release and
+-- reclaim. Kept per character for /reload.
 
 local PREFIX = "GRZ_TOMB";
 local SILVER_R, SILVER_G, SILVER_B = 0.85, 0.88, 0.95;
 
-GrizzleTombstone = GrizzleTombstone or nil;   -- { zone, x, y, xp } (SavedVariablesPerCharacter)
+GrizzleTombstone = GrizzleTombstone or nil;   -- { zone, x, y, xp, shade } (SavedVariablesPerCharacter)
+
+local function StoneName(stone)
+    return stone and stone.shade and "shade" or "tombstone";
+end
 
 -- --- XP bar ----------------------------------------------------------------------------------
 
@@ -47,7 +52,7 @@ local function AddTombstoneLine()
         return;
     end
     local pct = math.floor(stone.xp * 100 / max + 0.5);
-    GameTooltip:AddLine(pct .. "% of a level lingers at your tombstone (" .. stone.zone .. ")",
+    GameTooltip:AddLine(pct .. "% of a level lingers at your " .. StoneName(stone) .. " (" .. stone.zone .. ")",
         SILVER_R, SILVER_G, SILVER_B, true);
     GameTooltip:Show();
 end
@@ -87,7 +92,7 @@ else
 end
 pin:SetScript("OnEnter", function(self)
     WorldMapTooltip:SetOwner(self, "ANCHOR_RIGHT");
-    WorldMapTooltip:SetText("Your tombstone", SILVER_R, SILVER_G, SILVER_B);
+    WorldMapTooltip:SetText("Your " .. StoneName(GrizzleTombstone), SILVER_R, SILVER_G, SILVER_B);
     WorldMapTooltip:Show();
 end);
 pin:SetScript("OnLeave", function() WorldMapTooltip:Hide(); end);
@@ -130,10 +135,10 @@ events:SetScript("OnEvent", function(self, event, prefix, message, channel)
         if prefix ~= PREFIX or channel ~= "WHISPER" then
             return;
         end
-        local zone, x, y, xp = strsplit("\t", message or "");
+        local zone, x, y, xp, kind = strsplit("\t", message or "");
         xp = tonumber(xp);
         if zone and zone ~= "" and xp then
-            GrizzleTombstone = { zone = zone, x = tonumber(x) or 0, y = tonumber(y) or 0, xp = xp };
+            GrizzleTombstone = { zone = zone, x = tonumber(x) or 0, y = tonumber(y) or 0, xp = xp, shade = kind == "shade" };
         else
             GrizzleTombstone = nil;
         end

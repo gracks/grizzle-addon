@@ -1,55 +1,11 @@
 -- Grizzle Addon
--- Custom tooltip overrides for cold system spells and Basic Campfire
+-- Custom tooltip overrides for Basic Campfire and Cozy Fire
 
 -- Spell IDs (from worldserver.conf)
 local CAMPFIRE_SPELL_ID = 818;    -- Basic Campfire (ColdSystem.CampfireSpellId)
-local WARNING_SPELL_ID = 38639;   -- Biting Cold warning (ColdSystem.WarningSpellId)
-local COLD_SPELL_ID = 68510;      -- Penetrating Cold (ColdSystem.ColdSpellId)
 local WARMTH_SPELL_ID = 7358;     -- Cozy Fire: the campfire rest buff (CampfireRest.SpellId)
 local REST_TEXT = "Spirit increased by 8. Rain takes 5 min to drench you, and you dry off in 15 sec.";
 local WET_SPELL_ID = 61870;       -- Drenched (Wet.SpellId)
-
--- Global tooltip scanner - runs on every frame to catch any tooltip
--- This is a fallback that should catch tooltips regardless of how they're created
-local tooltipScannerFrame = CreateFrame("Frame");
-tooltipScannerFrame:SetScript("OnUpdate", function(self, elapsed)
-    self.elapsed = (self.elapsed or 0) + elapsed;
-    -- Only check every 0.03 seconds to avoid performance issues but still be responsive
-    if self.elapsed < 0.03 then
-        return;
-    end
-    self.elapsed = 0;
-    
-    -- Check GameTooltip (main tooltip)
-    if GameTooltip:IsVisible() then
-        local firstLine = _G["GameTooltipTextLeft1"];
-        if firstLine then
-            local text = firstLine:GetText();
-            if text then
-                local lowerText = string.lower(text);
-                -- Check if this is Penetrating Cold and hasn't been modified yet
-                if string.find(lowerText, "penetrating") and not string.find(lowerText, "shivering") then
-                    -- Check if we've already modified this tooltip
-                    if not GameTooltip._grizzleColdModified then
-                        GameTooltip._grizzleColdModified = true;
-                        ModifyColdTooltip();
-                    end
-                elseif string.find(lowerText, "biting") and not GameTooltip._grizzleWarningModified then
-                    GameTooltip._grizzleWarningModified = true;
-                    ModifyWarningTooltip();
-                elseif string.find(lowerText, "cozy") and not GameTooltip._grizzleWarmthModified then
-                    GameTooltip._grizzleWarmthModified = true;
-                    ModifyWarmthTooltip();
-                end
-            end
-        end
-    else
-        -- Reset flags when tooltip is hidden
-        GameTooltip._grizzleColdModified = nil;
-        GameTooltip._grizzleWarningModified = nil;
-        GameTooltip._grizzleWarmthModified = nil;
-    end
-end);
 
 -- Campfire values (from worldserver.conf)
 local CAMPFIRE_CAST_TIME = 5;     -- Cast time in seconds (ColdSystem.CampfireCastTime = 5000ms)
@@ -96,81 +52,6 @@ local function ModifyCampfireTooltip()
     end
 end
 
--- Function to override Biting Cold (warning) tooltip
-local function ModifyWarningTooltip()
-    -- Find the description line and replace it
-    local numLines = GameTooltip:NumLines();
-    local foundDescription = false;
-    
-    for i = 1, numLines do
-        local leftText = _G["GameTooltipTextLeft" .. i];
-        if leftText then
-            local text = leftText:GetText();
-            if text and not foundDescription then
-                -- Look for the main description (usually the first non-empty line after the title)
-                -- Replace it with our custom description
-                if string.len(text) > 10 and not string.find(text, "Rank") and not string.find(text, "Requires") then
-                    leftText:SetText("You are growing cold. If you don't find warmth soon, you will suffer from Penetrating Cold, which slows your attack speed, casting speed, and cooldown recovery.");
-                    foundDescription = true;
-                end
-            end
-        end
-    end
-    
-    -- If we didn't find a description line, add one at the end
-    if not foundDescription then
-        GameTooltip:AddLine("You are growing cold. If you don't find warmth soon, you will suffer from Penetrating Cold, which slows your attack speed, casting speed, and cooldown recovery.", 1, 1, 1, true);
-        GameTooltip:Show();
-    end
-end
-
--- Function to override Penetrating Cold (cold debuff) tooltip
-local function ModifyColdTooltip()
-    local numLines = GameTooltip:NumLines();
-    local foundTitle = false;
-    local foundDescription = false;
-    
-    -- First, always replace the first line if it contains "Penetrating"
-    local firstLine = _G["GameTooltipTextLeft1"];
-    if firstLine then
-        local text = firstLine:GetText();
-        if text and string.find(string.lower(text), "penetrating") then
-            firstLine:SetText("Shivering");
-            foundTitle = true;
-        end
-    end
-    
-    -- Then scan all lines for damage/frost text to replace
-    for i = 1, numLines do
-        local leftText = _G["GameTooltipTextLeft" .. i];
-        if leftText then
-            local text = leftText:GetText();
-            if text then
-                local lowerText = string.lower(text);
-                -- Replace any line that mentions damage, frost, or the original description
-                if not foundDescription and (string.find(lowerText, "damage") or string.find(lowerText, "frost") or string.find(lowerText, "inflicted") or string.find(lowerText, "every") or string.find(lowerText, "sec")) then
-                    leftText:SetText("Attack rate, cast time, and cooldowns are slowed by 40%. Find a warm campfire.");
-                    foundDescription = true;
-                end
-            end
-        end
-    end
-    
-    -- If we didn't find the title in first line, replace it anyway
-    if not foundTitle and firstLine then
-        firstLine:SetText("Shivering");
-        foundTitle = true;
-    end
-    
-    -- If we didn't find the description, add it at the end
-    if not foundDescription then
-        GameTooltip:AddLine("Attack rate, cast time, and cooldowns are slowed by 40%. Find a warm campfire.", 1, 0.82, 0, true);  -- Yellow color
-    end
-    
-    -- Always show the tooltip after modification
-    GameTooltip:Show();
-end
-
 -- Function to override the Cozy Fire tooltip (campfire rest buff: adds what it does to Drenched)
 local function ModifyWarmthTooltip()
     local numLines = GameTooltip:NumLines();
@@ -211,18 +92,6 @@ function GameTooltip:SetSpell(spellID, rank)
                 self:SetScript("OnUpdate", nil);
             end
         end);
-    elseif spellID == WARNING_SPELL_ID then
-        ModifyWarningTooltip();
-    elseif spellID == COLD_SPELL_ID then
-        -- Use a small delay to ensure tooltip is populated
-        local frame = CreateFrame("Frame");
-        frame:SetScript("OnUpdate", function(self, elapsed)
-            self.elapsed = (self.elapsed or 0) + elapsed;
-            if self.elapsed >= 0.1 then
-                ModifyColdTooltip();
-                self:SetScript("OnUpdate", nil);
-            end
-        end);
     elseif spellID == WARMTH_SPELL_ID then
         ModifyWarmthTooltip();
     end
@@ -235,10 +104,6 @@ if GameTooltip.SetSpellByID then
         originalSetSpellByID(self, spellID);
         if spellID == CAMPFIRE_SPELL_ID then
             ModifyCampfireTooltip();
-        elseif spellID == WARNING_SPELL_ID then
-            ModifyWarningTooltip();
-        elseif spellID == COLD_SPELL_ID then
-            ModifyColdTooltip();
         elseif spellID == WARMTH_SPELL_ID then
             ModifyWarmthTooltip();
         end
@@ -264,10 +129,6 @@ frame:SetScript("OnEvent", function(self, event, addonName)
                         self:SetScript("OnUpdate", nil);
                     end
                 end);
-            elseif spellID == WARNING_SPELL_ID then
-                ModifyWarningTooltip();
-            elseif spellID == COLD_SPELL_ID then
-                ModifyColdTooltip();
             elseif spellID == WARMTH_SPELL_ID then
                 ModifyWarmthTooltip();
             end
@@ -288,16 +149,7 @@ frame:SetScript("OnEvent", function(self, event, addonName)
                     local text = firstLine:GetText();
                     if text then
                         local lowerText = string.lower(text);
-                        if string.find(lowerText, "penetrating") and not string.find(lowerText, "shivering") then
-                            -- This is the cold spell, modify it
-                            ModifyColdTooltip();
-                            self:SetScript("OnUpdate", nil);
-                            return;
-                        elseif string.find(lowerText, "biting") then
-                            ModifyWarningTooltip();
-                            self:SetScript("OnUpdate", nil);
-                            return;
-                        elseif string.find(lowerText, "cozy") then
+                        if string.find(lowerText, "cozy") then
                             ModifyWarmthTooltip();
                             self:SetScript("OnUpdate", nil);
                             return;
@@ -322,16 +174,6 @@ frame:SetScript("OnEvent", function(self, event, addonName)
                     self._grizzleModified = true;
                     ModifyCampfireTooltip();
                 end
-            elseif spellID == COLD_SPELL_ID then
-                if not self._grizzleModified then
-                    self._grizzleModified = true;
-                    ModifyColdTooltip();
-                end
-            elseif spellID == WARNING_SPELL_ID then
-                if not self._grizzleModified then
-                    self._grizzleModified = true;
-                    ModifyWarningTooltip();
-                end
             elseif spellID == WARMTH_SPELL_ID then
                 if not self._grizzleModified then
                     self._grizzleModified = true;
@@ -346,14 +188,7 @@ frame:SetScript("OnEvent", function(self, event, addonName)
                         local text = firstLine:GetText();
                         if text then
                             local lowerText = string.lower(text);
-                            if string.find(lowerText, "penetrating") and not string.find(lowerText, "shivering") then
-                                -- This is the cold spell, modify it
-                                self._grizzleModified = true;
-                                ModifyColdTooltip();
-                            elseif string.find(lowerText, "biting") then
-                                self._grizzleModified = true;
-                                ModifyWarningTooltip();
-                            elseif string.find(lowerText, "cozy") then
+                            if string.find(lowerText, "cozy") then
                                 self._grizzleModified = true;
                                 ModifyWarmthTooltip();
                             end
@@ -385,8 +220,6 @@ frame:SetScript("OnEvent", function(self, event, addonName)
                         self:SetScript("OnUpdate", nil);
                     end
                 end);
-            elseif spellID == WARNING_SPELL_ID then
-                ModifyWarningTooltip();
             end
         end
         
@@ -401,19 +234,7 @@ frame:SetScript("OnEvent", function(self, event, addonName)
                 name, rank, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, shouldConsolidate, spellId = UnitAura(unit, index, filter == "HELPFUL" and "HARMFUL" or "HELPFUL");
             end
             if spellId then
-                if spellId == COLD_SPELL_ID then
-                    -- Use a small delay to ensure tooltip is populated
-                    local frame = CreateFrame("Frame");
-                    frame:SetScript("OnUpdate", function(self, elapsed)
-                        self.elapsed = (self.elapsed or 0) + elapsed;
-                        if self.elapsed >= 0.1 then
-                            ModifyColdTooltip();
-                            self:SetScript("OnUpdate", nil);
-                        end
-                    end);
-                elseif spellId == WARNING_SPELL_ID then
-                    ModifyWarningTooltip();
-                elseif spellId == WARMTH_SPELL_ID then
+                if spellId == WARMTH_SPELL_ID then
                     ModifyWarmthTooltip();
                 end
             end
@@ -425,8 +246,6 @@ frame:SetScript("OnEvent", function(self, event, addonName)
                 local spellID = button:GetSpellID();
                 if spellID == CAMPFIRE_SPELL_ID then
                     ModifyCampfireTooltip();
-                elseif spellID == WARNING_SPELL_ID then
-                    ModifyWarningTooltip();
                 end
             end);
         end
@@ -441,7 +260,7 @@ end);
 local MARKER_TEXT = {
     [WET_SPELL_ID] = {   -- Drenched (Wet.SpellId)
         old = "Drenched!",
-        text = "Fire hurts you less; frost and nature hurt you more. Slower health regen while standing. Dry off indoors or by a fire.",
+        text = "You take 10% less Fire damage and 10% more Frost damage. Health and mana regenerate 35% slower. Dry off indoors or by a fire.",
     },
     [90000] = {          -- Snowbound (Snowbound.SpellId)
         mobOld = "Deep snow slows movement, attacks, and casting.",
