@@ -147,6 +147,76 @@ for bearing, text in pairs(POINTS) do
     labels[bearing] = label;
 end
 
+-- The Twinned Bindstone's marker (doc/grizzle/bindstone.md "On the compass"): toward the other half, brighter the
+-- closer it is. The server whispers GRZ_BIND <angle>\t<step 1-4>\t<ok|trouble|pulled>, or nothing for no marker.
+local BIND_PREFIX = "GRZ_BIND";
+local BIND_ALPHA = { 0.25, 0.4, 0.6, 0.85 };    -- by step, far to near
+local BIND_SIZE = 14;
+local bind;                                     -- { bearing, step, state }, or nil
+local heading = 0;
+
+local marker = compass:CreateTexture(nil, "ARTWORK");
+marker:SetTexture("Interface\\AddOns\\grizzle\\textures\\compass_marker");
+marker:SetVertexColor(0.75, 0.7, 1);
+marker:SetBlendMode("ADD");
+marker:SetSize(BIND_SIZE, BIND_SIZE);
+marker:Hide();
+local markerAlpha = 0;
+
+local function PlaceMarker()
+    if not bind then
+        marker:Hide();
+        return;
+    end
+    local delta = (bind.bearing - heading + 540) % 360 - 180;
+    local alpha = BIND_ALPHA[bind.step] or BIND_ALPHA[1];
+    if math.abs(delta) > 90 then
+        -- behind you: at the nearer end of the strip, dimmer
+        delta = delta > 0 and 90 or -90;
+        alpha = alpha * 0.6;
+    end
+    marker:ClearAllPoints();
+    marker:SetPoint("CENTER", compass, "CENTER", delta * COMPASS_WIDTH / 180, 0);
+    markerAlpha = alpha;
+    marker:Show();
+end
+
+-- trouble (holder dead or fighting): a slow, uneven flicker; pulled (they're coming to you): a pulse
+local markerAnim = CreateFrame("Frame");
+markerAnim:SetScript("OnUpdate", function()
+    if not bind then
+        return;
+    end
+    local t = GetTime();
+    local alpha, size = markerAlpha, BIND_SIZE;
+    if bind.state == "trouble" then
+        alpha = alpha * (0.6 + 0.4 * math.sin(t * 2.5) * math.sin(t * 4.1));
+    elseif bind.state == "pulled" then
+        local beat = 0.5 + 0.5 * math.sin(t * 6);
+        alpha = math.min(1, alpha * (1 + 0.6 * beat));
+        size = BIND_SIZE * (1 + 0.3 * beat);
+    end
+    marker:SetAlpha(alpha);
+    marker:SetSize(size, size);
+end);
+
+local bindEvents = CreateFrame("Frame");
+bindEvents:RegisterEvent("CHAT_MSG_ADDON");
+bindEvents:SetScript("OnEvent", function(self, event, prefix, message, channel)
+    if prefix ~= BIND_PREFIX or channel ~= "WHISPER" then
+        return;
+    end
+    local angle, step, state = strsplit("\t", message or "");
+    angle = tonumber(angle);
+    if angle then
+        -- the server's angle runs like GetPlayerFacing: 0 = north, counter-clockwise
+        bind = { bearing = (360 - math.deg(angle)) % 360, step = tonumber(step) or 1, state = state or "ok" };
+    else
+        bind = nil;
+    end
+    PlaceMarker();
+end);
+
 local lastFacing;
 compass:SetScript("OnUpdate", function()
     local facing = GetPlayerFacing();
@@ -155,7 +225,8 @@ compass:SetScript("OnUpdate", function()
     end
     lastFacing = facing;
     -- GetPlayerFacing: radians, 0 = north, counter-clockwise; compass bearings run clockwise
-    local heading = (360 - math.deg(facing)) % 360;
+    heading = (360 - math.deg(facing)) % 360;
+    PlaceMarker();
     for bearing, label in pairs(labels) do
         local delta = (bearing - heading + 540) % 360 - 180;
         if math.abs(delta) <= 90 then
