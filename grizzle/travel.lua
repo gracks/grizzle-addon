@@ -148,9 +148,9 @@ for bearing, text in pairs(POINTS) do
 end
 
 -- The Twinned Bindstone's marker (doc/grizzle/bindstone.md "On the compass"): toward the other half, brighter the
--- closer it is. The server whispers GRZ_BIND <angle>\t<step 1-4>\t<ok|trouble|pulled>, or nothing for no marker.
+-- closer it is. The server whispers GRZ_BIND <angle>\t<step 1-3>\t<ok|trouble|pulled>, or nothing for no marker.
 local BIND_PREFIX = "GRZ_BIND";
-local BIND_ALPHA = { 0.25, 0.4, 0.6, 0.85 };    -- by step, far to near
+local BIND_ALPHA = { 0.4, 0.6, 0.85 };          -- by step, far to near
 local BIND_SIZE = 14;
 local bind;                                     -- { bearing, step, state }, or nil
 local heading = 0;
