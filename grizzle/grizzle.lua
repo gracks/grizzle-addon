@@ -325,15 +325,44 @@ local function HookCombatLog()
     end
 end
 
+-- The combat log always shows everything: its quick-button bar (Self, Everything, What happened to me?) is hidden,
+-- since a stray click there left a player wondering why half the fight was missing (Greg's playtest, Oct 28 2026).
+local function SimplifyCombatLog()
+    local bar = CombatLogQuickButtonFrame_Custom;
+    if bar and not bar.grizzleHidden then
+        bar.grizzleHidden = true;
+        bar:Hide();
+        bar:HookScript("OnShow", bar.Hide);
+    end
+    local filters = Blizzard_CombatLog_Filters and Blizzard_CombatLog_Filters.filters;
+    if filters and type(Blizzard_CombatLog_QuickButton_OnClick) == "function" then
+        for i, filter in ipairs(filters) do
+            if filter.name == QUICKBUTTON_NAME_EVERYTHING then
+                if Blizzard_CombatLog_Filters.currentFilter ~= i then
+                    Blizzard_CombatLog_QuickButton_OnClick(i);
+                end
+                break;
+            end
+        end
+    end
+end
+
+local function SetUpCombatLog()
+    HookCombatLog();
+    SimplifyCombatLog();
+end
+
 local combatLogFrame = CreateFrame("Frame");
 combatLogFrame:RegisterEvent("ADDON_LOADED");
+combatLogFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
 combatLogFrame:SetScript("OnEvent", function(self, event, addonName)
-    if addonName == "Blizzard_CombatLog" then
-        HookCombatLog();
-        self:UnregisterEvent("ADDON_LOADED");
+    if event == "PLAYER_ENTERING_WORLD" then
+        if IsAddOnLoaded("Blizzard_CombatLog") then SimplifyCombatLog(); end
+    elseif addonName == "Blizzard_CombatLog" then
+        SetUpCombatLog();
     end
 end);
-if IsAddOnLoaded("Blizzard_CombatLog") then HookCombatLog(); end
+if IsAddOnLoaded("Blizzard_CombatLog") then SetUpCombatLog(); end
 
 -- Minimap tracking: only tracking spells you know (Find Herbs, Find Minerals, Hunter tracks...).
 -- Town tracking (banker, mailbox, trainers, flight master...) is gone: players find those in the

@@ -148,17 +148,17 @@ for bearing, text in pairs(POINTS) do
 end
 
 -- The Twinned Bindstone's marker (doc/grizzle/bindstone.md "On the compass"): toward the other half, brighter the
--- closer it is. The server whispers GRZ_BIND <angle>\t<step 1-3>\t<ok|trouble|pulled>, or nothing for no marker.
+-- closer it is. A solid cyan arrowhead under the letter row, pointing up at the bearing: drawn additive over the
+-- letters it washed out (Greg's playtest, Oct 28 2026). The server whispers GRZ_BIND <angle>\t<step 1-3>\t<ok|trouble|pulled>, or nothing for no marker.
 local BIND_PREFIX = "GRZ_BIND";
-local BIND_ALPHA = { 0.4, 0.6, 0.85 };          -- by step, far to near
+local BIND_ALPHA = { 0.55, 0.75, 1 };          -- by step, far to near
 local BIND_SIZE = 14;
 local bind;                                     -- { bearing, step, state }, or nil
 local heading = 0;
 
 local marker = compass:CreateTexture(nil, "ARTWORK");
 marker:SetTexture("Interface\\AddOns\\grizzle\\textures\\compass_marker");
-marker:SetVertexColor(0.75, 0.7, 1);
-marker:SetBlendMode("ADD");
+marker:SetVertexColor(0.2, 0.85, 1);
 marker:SetSize(BIND_SIZE, BIND_SIZE);
 marker:Hide();
 local markerAlpha = 0;
@@ -176,7 +176,7 @@ local function PlaceMarker()
         alpha = alpha * 0.6;
     end
     marker:ClearAllPoints();
-    marker:SetPoint("CENTER", compass, "CENTER", delta * COMPASS_WIDTH / 180, 0);
+    marker:SetPoint("TOP", compass, "BOTTOM", delta * COMPASS_WIDTH / 180, -1);
     markerAlpha = alpha;
     marker:Show();
 end

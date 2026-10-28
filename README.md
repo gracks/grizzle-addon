@@ -17,18 +17,17 @@ The client addon for the Grizzle WoW server, plus a launcher that keeps it up to
    a special Wine prefix, set it in the environment, e.g.
    `GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh`.
 
-Each time it runs, the launcher downloads the latest addon into `Interface/AddOns/grizzle` (and
-the Grizzle client patch into `Data/`, when there is one), then starts WoW. If the download fails,
-it starts WoW with the versions you already have. The launcher also updates itself the same way.
-
-There's no client patch at the moment. If you have a `Data/patch-G.MPQ` from an earlier version,
-you can delete it; it doesn't do anything.
+Each time it runs, the launcher downloads the latest addon into `Interface/AddOns/grizzle` and
+the Grizzle client patch into `Data/`, sets the realm to Grizzle, then starts WoW. If the download
+fails, it starts WoW with the versions you already have. The launcher also updates itself the same way.
 
 ## Testing (Test realm)
 
-To try the addon version being tested on the Test realm, also download `launcher/play-grizzle-test.cmd`
-into the WoW folder and start the game with it (Linux: `GRIZZLE_BRANCH=test ./play-grizzle.sh`).
-Go back to the normal launcher for the main realm; it puts the regular version back.
+To play on Grizzle Test, also download `launcher/play-grizzle-test.cmd` into the WoW folder and
+start the game with it (Linux: `GRIZZLE_BRANCH=test ./play-grizzle.sh`). It gets the version being
+tested and sets the realm to Grizzle Test. Each launcher is for its own realm: Test's client patch
+doesn't match Grizzle and the normal one doesn't match Grizzle Test, so the addon warns you if you
+pick the other realm from the realm list. To play Grizzle again, start the normal launcher.
 
 ## Manual install
 

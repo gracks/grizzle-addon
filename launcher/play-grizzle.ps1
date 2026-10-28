@@ -1,7 +1,8 @@
 # Play Grizzle: updates the Grizzle addon and client patch from GitHub, then starts WoW.
 # Lives in the WoW folder (next to Wow.exe). Run it through play-grizzle.cmd.
 # If the update fails (no internet, GitHub down), it says so and starts WoW anyway.
-# -Branch test gets the addon being tested on the Test realm (play-grizzle-test.cmd).
+# -Branch test gets the addon being tested on the Test realm (play-grizzle-test.cmd). Each launcher logs in to its own
+# realm (Grizzle or Grizzle Test), since the client patch only matches that server.
 # It updates itself: when the download has a newer play-grizzle.ps1, it replaces this file and runs
 # the new one (-NoSelfUpdate stops that from repeating).
 
@@ -58,6 +59,25 @@ finally {
 if ($Rerun) {
     & $PSCommandPath -Branch $Branch -NoSelfUpdate
     exit
+}
+
+# One launcher, one realm: the client patch only matches the server it came with, so pin the realm the client logs
+# in to and tell the addon, which warns if the realm list is used to go elsewhere (doc/grizzle/launcher.md)
+$Realm = if ($Branch -eq "test") { "Grizzle Test" } else { "Grizzle" }
+try {
+    $Wtf = Join-Path $WowDir "WTF"
+    New-Item -ItemType Directory -Force -Path $Wtf | Out-Null
+    $Config = Join-Path $Wtf "Config.wtf"
+    $Lines = @()
+    if (Test-Path $Config) { $Lines = @(Get-Content $Config | Where-Object { $_ -notmatch '^SET realmName ' }) }
+    Set-Content -Encoding ASCII -Path $Config -Value ($Lines + "SET realmName ""$Realm""")
+    $Addon = Join-Path $AddOns "grizzle"
+    if (Test-Path $Addon) {
+        Set-Content -Encoding ASCII -Path (Join-Path $Addon "launcher.lua") -Value "GrizzleLauncherRealm = ""$Realm"";"
+    }
+}
+catch {
+    Write-Warning "Couldn't set the realm to $($Realm): $($_.Exception.Message)"
 }
 
 $Exe = Join-Path $WowDir "Wow.exe"

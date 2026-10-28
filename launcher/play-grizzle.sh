@@ -6,6 +6,7 @@
 #   GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh
 #   WINEPREFIX=~/games/wow ./play-grizzle.sh
 # To get the addon being tested on the Test realm: GRIZZLE_BRANCH=test ./play-grizzle.sh
+# Each branch logs in to its own realm (Grizzle or Grizzle Test), since the client patch only matches that server.
 # It updates itself: when the download has a newer play-grizzle.sh, it replaces this file and runs
 # the new one (GRIZZLE_UPDATED=1 stops that from repeating).
 
@@ -61,6 +62,20 @@ else
     echo "WARNING: couldn't update the Grizzle addon or client patch; starting WoW with what you already have." >&2
     sleep 3
 fi
+
+# One launcher, one realm: the client patch only matches the server it came with, so pin the realm the client logs
+# in to and tell the addon, which warns if the realm list is used to go elsewhere (doc/grizzle/launcher.md)
+if [ "$BRANCH" = test ]; then REALM="Grizzle Test"; else REALM="Grizzle"; fi
+pin_realm() {
+    local cfg="$WOW_DIR/WTF/Config.wtf"
+    mkdir -p "$WOW_DIR/WTF" || return 1
+    { [ -f "$cfg" ] && grep -v '^SET realmName ' "$cfg"; printf 'SET realmName "%s"\r\n' "$REALM"; } > "$cfg.new" \
+        && mv -f "$cfg.new" "$cfg" || return 1
+    if [ -d "$ADDONS/grizzle" ]; then
+        printf 'GrizzleLauncherRealm = "%s";\n' "$REALM" > "$ADDONS/grizzle/launcher.lua" || return 1
+    fi
+}
+pin_realm || echo "WARNING: couldn't set the realm to $REALM." >&2
 
 # Item cache: the server changes item stats, and the client shows its cached copy until this is gone.
 # WoW rebuilds it as you play.
