@@ -73,8 +73,17 @@ local function SetTargets()
     -- 0 at the lightest weather the client shows (grade 0.27), 1 at the heaviest
     local t = Ramp(grade, 0.27, 1);
     if kind == "snow" then
-        frostLight.target = 0.5 + 0.5 * t;
-        frostHeavy.target = Ramp(t, 0.3, 1);
+        -- frost goes up in steps with the client's light, medium and heavy snow: a faint rim in light snow, a clear
+        -- jump as medium snow brings Snowbound, full frost in heavy snow (the layers' speeds smooth each step)
+        if grade < 0.40 then
+            frostLight.target = 0.35;
+        elseif grade < 0.70 then
+            frostLight.target = 0.8;
+            frostHeavy.target = 0.3;
+        else
+            frostLight.target = 1;
+            frostHeavy.target = 0.8;
+        end
     elseif kind == "rain" then
         mistLight.target = MIST * (0.5 + 0.2 * t);
         mistHeavy.target = MIST * Ramp(t, 0.3, 1) * 0.6;
