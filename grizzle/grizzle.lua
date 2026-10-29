@@ -326,13 +326,20 @@ local function HookCombatLog()
 end
 
 -- The combat log always shows everything: its quick-button bar (Self, Everything, What happened to me?) is hidden,
--- since a stray click there left a player wondering why half the fight was missing (Greg's playtest, Oct 28 2026).
+-- since a stray click there left a player wondering why half the fight was missing, and its room goes to log lines
+-- (Greg's playtest, Oct 28 2026).
 local function SimplifyCombatLog()
     local bar = CombatLogQuickButtonFrame_Custom;
     if bar and not bar.grizzleHidden then
         bar.grizzleHidden = true;
         bar:Hide();
         bar:HookScript("OnShow", bar.Hide);
+        -- Blizzard_CombatLog drops the log's top edge (and lifts its background) by the bar's height, hidden or
+        -- not, whenever FCF_DockUpdate runs; with the bar flat the log's text starts at the top
+        bar:SetHeight(0.001);
+        if type(FCF_DockUpdate) == "function" then
+            FCF_DockUpdate();
+        end
     end
     local filters = Blizzard_CombatLog_Filters and Blizzard_CombatLog_Filters.filters;
     if filters and type(Blizzard_CombatLog_QuickButton_OnClick) == "function" then
