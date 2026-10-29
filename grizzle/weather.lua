@@ -76,7 +76,7 @@ local function SetTargets()
         -- frost goes up in steps with the client's light, medium and heavy snow: a faint rim in light snow, a clear
         -- jump as medium snow brings Snowbound, full frost in heavy snow (the layers' speeds smooth each step)
         if grade < 0.40 then
-            frostLight.target = 0.35;
+            frostLight.target = 0.25;
         elseif grade < 0.70 then
             frostLight.target = 0.8;
             frostHeavy.target = 0.3;
