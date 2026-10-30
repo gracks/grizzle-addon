@@ -1,10 +1,5 @@
--- One launcher, one realm (doc/grizzle/launcher.md): each launcher copies in its branch's client patch and pins its
--- realm. The patch only matches the server it came with, so if the realm list was used to go elsewhere, say so.
-
-local LAUNCHERS = {
-    ["Grizzle"] = "play-grizzle.cmd",
-    ["Grizzle Test"] = "play-grizzle-test.cmd",
-};
+-- One launcher, one realm (doc/grizzle/launcher.md): the launcher copies in the chosen realm's client patch and pins
+-- that realm. The patch only matches the server it came with, so if the realm list was used to go elsewhere, say so.
 
 StaticPopupDialogs["GRIZZLE_WRONG_REALM"] = {
     text = "%s",
@@ -21,10 +16,9 @@ events:SetScript("OnEvent", function()
     if not expected or realm == expected then
         return;
     end
-    local fix = LAUNCHERS[realm] and ("Quit WoW and start it with " .. LAUNCHERS[realm] .. ".")
-        or ("Quit WoW and start it with " .. (LAUNCHERS[expected] or "your Grizzle launcher") .. ".");
-    local text = "You started WoW with the launcher for " .. expected .. ", but you're on " .. realm
-        .. ". Some spells and items will be missing or wrong. " .. fix;
+    local text = "You started WoW with the launcher set to " .. expected .. ", but you're on " .. realm
+        .. ". Some spells and items will be missing or wrong. Quit WoW, start Play Grizzle and pick "
+        .. ((realm == "Grizzle" or realm == "Grizzle Test") and realm or "the realm you want") .. ".";
     DEFAULT_CHAT_FRAME:AddMessage("|cffff4040Grizzle:|r " .. text);
     StaticPopup_Show("GRIZZLE_WRONG_REALM", text);
 end);

@@ -5,15 +5,24 @@
 # How WoW is started can be changed without editing this file, e.g.:
 #   GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh
 #   WINEPREFIX=~/games/wow ./play-grizzle.sh
-# To get the addon being tested on the Test realm: GRIZZLE_BRANCH=test ./play-grizzle.sh
-# Each branch logs in to its own realm (Grizzle or Grizzle Test), since the client patch only matches that server.
+# To play on the Test realm: GRIZZLE_BRANCH=test ./play-grizzle.sh (GRIZZLE_BRANCH=main to go back). Without it,
+# it plays the realm it played last time. Each branch logs in to its own realm (Grizzle or Grizzle Test), since the
+# client patch only matches that server.
 # It updates itself: when the download has a newer play-grizzle.sh, it replaces this file and runs
 # the new one (GRIZZLE_UPDATED=1 stops that from repeating).
 
 REPO="gracks/grizzle-addon"   # GitHub owner/repo holding the addon
-BRANCH="${GRIZZLE_BRANCH:-main}"
 
 WOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# No GRIZZLE_BRANCH: the realm the last launch pinned
+if [ -n "$GRIZZLE_BRANCH" ]; then
+    BRANCH="$GRIZZLE_BRANCH"
+elif grep -q '^SET realmName "Grizzle Test"' "$WOW_DIR/WTF/Config.wtf" 2>/dev/null; then
+    BRANCH=test
+else
+    BRANCH=main
+fi
+export GRIZZLE_BRANCH="$BRANCH"   # the updated script, if it reruns, plays the same realm
 ADDONS="$WOW_DIR/Interface/AddOns"
 PATCH="patch-G.MPQ"
 URL="https://github.com/$REPO/archive/refs/heads/$BRANCH.zip"
