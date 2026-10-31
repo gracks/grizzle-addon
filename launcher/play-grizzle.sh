@@ -6,7 +6,7 @@
 #   GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh
 #   WINEPREFIX=~/games/wow ./play-grizzle.sh
 # To play on the Test realm: GRIZZLE_BRANCH=test ./play-grizzle.sh (GRIZZLE_BRANCH=main to go back). Without it,
-# it plays the realm it played last time. Each branch logs in to its own realm (Grizzle or Grizzle Test), since the
+# it plays the realm it played last time. Each branch logs in to its own realm (Veilmoor or Veilmoor Test), since the
 # client patch only matches that server.
 # It updates itself: when the download has a newer play-grizzle.sh, it replaces this file and runs
 # the new one (GRIZZLE_UPDATED=1 stops that from repeating).
@@ -17,7 +17,7 @@ WOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # No GRIZZLE_BRANCH: the realm the last launch pinned
 if [ -n "$GRIZZLE_BRANCH" ]; then
     BRANCH="$GRIZZLE_BRANCH"
-elif grep -q '^SET realmName "Grizzle Test"' "$WOW_DIR/WTF/Config.wtf" 2>/dev/null; then
+elif grep -Eq '^SET realmName "(Veilmoor|Grizzle) Test"' "$WOW_DIR/WTF/Config.wtf" 2>/dev/null; then
     BRANCH=test
 else
     BRANCH=main
@@ -74,15 +74,23 @@ fi
 
 # One launcher, one realm: the client patch only matches the server it came with, so pin the realm the client logs
 # in to and tell the addon, which warns if the realm list is used to go elsewhere (doc/grizzle/launcher.md)
-if [ "$BRANCH" = test ]; then REALM="Grizzle Test"; else REALM="Grizzle"; fi
+# (OLD_REALM: its name before Oct 30 2026)
+if [ "$BRANCH" = test ]; then REALM="Veilmoor Test"; OLD_REALM="Grizzle Test"; else REALM="Veilmoor"; OLD_REALM="Grizzle"; fi
 pin_realm() {
-    local cfg="$WOW_DIR/WTF/Config.wtf"
+    local cfg="$WOW_DIR/WTF/Config.wtf" account
     mkdir -p "$WOW_DIR/WTF" || return 1
     { [ -f "$cfg" ] && grep -v '^SET realmName ' "$cfg"; printf 'SET realmName "%s"\r\n' "$REALM"; } > "$cfg.new" \
         && mv -f "$cfg.new" "$cfg" || return 1
     if [ -d "$ADDONS/grizzle" ]; then
         printf 'GrizzleLauncherRealm = "%s";\n' "$REALM" > "$ADDONS/grizzle/launcher.lua" || return 1
     fi
+    # The client keeps each character's macros, bindings and saved variables under WTF/Account/<account>/<realm>, so
+    # carry them over from the realm's old name
+    for account in "$WOW_DIR"/WTF/Account/*/; do
+        if [ -d "$account$OLD_REALM" ] && [ ! -e "$account$REALM" ]; then
+            mv "$account$OLD_REALM" "$account$REALM" || return 1
+        fi
+    done
 }
 pin_realm || echo "WARNING: couldn't set the realm to $REALM." >&2
 

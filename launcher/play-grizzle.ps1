@@ -1,8 +1,8 @@
 # Play Grizzle: updates the Grizzle addon and client patch from GitHub, then starts WoW.
 # Lives in the WoW folder (next to Wow.exe). Run it through play-grizzle.cmd.
-# It opens a window with the realm choice (Grizzle or Grizzle Test), the patch notes, whether the server is up and a
+# It opens a window with the realm choice (Veilmoor or Veilmoor Test), the patch notes, whether the server is up and a
 # Play button. The realm decides the branch it downloads (main or test), since the client patch only matches its own
-# server, and the choice is remembered through the realm pinned in WTF/Config.wtf. -Branch test preselects Grizzle
+# server, and the choice is remembered through the realm pinned in WTF/Config.wtf. -Branch test preselects Veilmoor
 # Test (the old play-grizzle-test.cmd passes it).
 # If the update fails (no internet, GitHub down), it says so and you can play with what you have. If the window can't
 # open, it carries on in the console as the launcher did before (-Console forces that).
@@ -12,7 +12,8 @@
 param([string]$Branch = "", [switch]$NoSelfUpdate, [switch]$Console)
 
 $Repo   = "gracks/grizzle-addon"   # GitHub owner/repo holding the addon
-$Realms = @{ main = "Grizzle"; test = "Grizzle Test" }   # the names in the realm list
+$Realms = @{ main = "Veilmoor"; test = "Veilmoor Test" }   # the names in the realm list
+$OldRealms = @{ main = "Grizzle"; test = "Grizzle Test" }  # their names before Oct 30 2026
 $Ports  = @{ main = 8086; test = 8087 }                   # each realm's world server, for the online check
 
 $ErrorActionPreference = "Stop"
@@ -27,7 +28,7 @@ $Rerun  = $false
 # No -Branch: the realm the last launch pinned
 if (-not $Branch) {
     $Text = if (Test-Path $Config) { Get-Content -Raw $Config } else { "" }
-    $Branch = if ($Text -match '(?m)^SET realmName "Grizzle Test"') { "test" } else { "main" }
+    $Branch = if ($Text -match '(?m)^SET realmName "(Veilmoor|Grizzle) Test"') { "test" } else { "main" }
 }
 if ($Branch -ne "test") { $Branch = "main" }
 
@@ -77,6 +78,16 @@ function Set-Realm($B) {
     Set-Content -Encoding ASCII -Path $Config -Value ($Lines + "SET realmName ""$Realm""")
     if (Test-Path $Addon) {
         Set-Content -Encoding ASCII -Path (Join-Path $Addon "launcher.lua") -Value "GrizzleLauncherRealm = ""$Realm"";"
+    }
+    # The client keeps each character's macros, bindings and saved variables under WTF\Account\<account>\<realm>, so
+    # carry them over from the realm's old name (a failed move only warns: it must never stop WoW from starting)
+    $Old = $OldRealms[$B]
+    Get-ChildItem -Directory -Path (Join-Path $WowDir "WTF\Account") -ErrorAction SilentlyContinue | ForEach-Object {
+        $From = Join-Path $_.FullName $Old
+        if ((Test-Path $From) -and -not (Test-Path (Join-Path $_.FullName $Realm))) {
+            try { Rename-Item -Path $From -NewName $Realm }
+            catch { Write-Warning "Couldn't rename $From to $($Realm): $($_.Exception.Message)" }
+        }
     }
 }
 
