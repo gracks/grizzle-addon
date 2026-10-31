@@ -45,7 +45,8 @@ function Install-Download($Zip) {
     New-Item -ItemType Directory -Force -Path $AddOns | Out-Null
     if (Test-Path $Addon) { Remove-Item -Recurse -Force $Addon }
     Copy-Item -Recurse -Path $Src.FullName -Destination $Addon
-    foreach ($F in "PATCHNOTES.md", "launcher\banner.jpg", "launcher\banner.png") {
+    Remove-Item -Force -Path (Join-Path $WowDir "WTF\grizzle-notes-*.txt") -ErrorAction SilentlyContinue   # the old "new since" copies
+    foreach ($F in "PATCHNOTES.md", "PATCHNOTES.dates", "launcher\banner.jpg", "launcher\banner.png") {
         $P = Join-Path $Root $F
         if (Test-Path $P) { Copy-Item -Force -Path $P -Destination $Addon }
     }
@@ -138,53 +139,111 @@ if ($Console) { Invoke-Console }
 
 # ---- The window ----
 
-# Patch notes: PATCHNOTES.md from the last download, newest version first. Lines that weren't there the last time
-# Play was pressed (for this realm) are highlighted, and the notes open at the first of them.
-function Show-Notes {
-    $Notes.Clear()
-    $Path = Join-Path $Addon "PATCHNOTES.md"
-    if (-not (Test-Path $Path)) {
-        $Notes.SelectionColor = $Ink
-        $Notes.AppendText("No patch notes yet. They come with the next update.")
-        return
-    }
-    $SeenFile = Join-Path $WowDir "WTF\grizzle-notes-$Branch.txt"
-    $Seen = New-Object 'System.Collections.Generic.HashSet[string]'
-    $HasSeen = Test-Path $SeenFile
-    if ($HasSeen) { foreach ($L in Get-Content -Encoding UTF8 $SeenFile) { [void]$Seen.Add($L) } }
-    $FirstNew = -1
-    foreach ($Line in Get-Content -Encoding UTF8 $Path) {
-        if ($Line -match '^# =+\s*$') { continue }
-        $Font = $FontBody; $Color = $Ink; $Text = $Line
-        if ($Line -match '^# (.*)') { $Font = $FontH1; $Color = $Gold; $Text = $Matches[1] }
-        elseif ($Line -match '^#{2,} (.*)') { $Font = $FontH2; $Color = $Gold; $Text = $Matches[1] }
-        elseif ($Line -match '^\s*- (.*)') { $Text = "   " + [char]0x2022 + "  " + $Matches[1] }
-        $New = $HasSeen -and $Line.Trim() -and -not $Seen.Contains($Line)
-        if ($New -and $FirstNew -lt 0) { $FirstNew = $Notes.TextLength }
-        # **bold** inside a line: every other piece between the markers
-        $Bold = $false
-        foreach ($Piece in ($Text -split '\*\*')) {
-            $Notes.SelectionStart = $Notes.TextLength
-            $Notes.SelectionLength = 0
-            $Notes.SelectionFont = if ($Bold -and $Font -eq $FontBody) { $FontBold } else { $Font }
-            $Notes.SelectionColor = $Color
-            $Notes.SelectionBackColor = if ($New) { $NewBack } else { $Panel }
-            $Notes.AppendText($Piece)
-            $Bold = -not $Bold
-        }
-        $Notes.AppendText("`n")
-    }
-    $NewLabel.Visible = $FirstNew -ge 0
-    $Notes.SelectionStart = [Math]::Max($FirstNew, 0)
-    $Notes.SelectionLength = 0
-    $Notes.ScrollToCaret()
-}
+# Patch notes: PATCHNOTES.md from the last download. The window opens on the lines changed in the last 3 days (the
+# times come from PATCHNOTES.dates, one per line, which publish-addon.sh makes from git blame) under their headings,
+# and a button per version ("# v1.2 ..." headings) shows that version's notes.
+$RecentDays = 3
 
-function Save-SeenNotes {
+# Reads the notes into $NoteLines (Text, Time; Time 0 without dates) and makes a button per view.
+function Read-Notes {
+    $script:NoteLines = @()
     $Path = Join-Path $Addon "PATCHNOTES.md"
     if (Test-Path $Path) {
-        Copy-Item -Force -Path $Path -Destination (Join-Path $WowDir "WTF\grizzle-notes-$Branch.txt")
+        $Lines = @(Get-Content -Encoding UTF8 $Path)
+        $DatesPath = Join-Path $Addon "PATCHNOTES.dates"
+        $Dates = if (Test-Path $DatesPath) { @(Get-Content $DatesPath) } else { @() }
+        if ($Dates.Count -ne $Lines.Count) { $Dates = @() }   # notes and dates from different publishes
+        $script:NoteLines = @(for ($I = 0; $I -lt $Lines.Count; $I++) {
+            @{ Text = $Lines[$I]; Time = $(if ($Dates) { [long]$Dates[$I] } else { 0 }) }
+        })
     }
+    $Views.Controls.Clear()
+    $script:DefaultView = "recent"
+    if ($NoteLines | Where-Object { $_.Time }) { Add-ViewButton "Last $RecentDays days" "recent" }
+    for ($I = 0; $I -lt $NoteLines.Count; $I++) {
+        if ($NoteLines[$I].Text -match '^# (v\S+)') {
+            Add-ViewButton $Matches[1] $I
+        }
+    }
+    # Without dates, open on the newest version
+    if (-not ($NoteLines | Where-Object { $_.Time }) -and $Views.Controls.Count) { $script:DefaultView = $Views.Controls[0].Tag }
+}
+
+function Add-ViewButton($Label, $View) {
+    $B = New-Object Windows.Forms.Button
+    $B.Text = $Label
+    $B.Tag = $View
+    $B.AutoSize = $true
+    $B.FlatStyle = "Flat"
+    $B.FlatAppearance.BorderColor = $Dim
+    $B.ForeColor = $Ink
+    $B.Margin = New-Object Windows.Forms.Padding(0, 8, 8, 0)
+    $B.add_Click({ param($S, $E) try { Show-Notes $S.Tag } catch { $Status.Text = $_.Exception.Message } })
+    $Views.Controls.Add($B)
+}
+
+# RTF text: escapes, and characters past ASCII as \u codes
+function ConvertTo-Rtf([string]$Text) {
+    $Text = $Text -replace '([\\{}])', '\$1'
+    [regex]::Replace($Text, '[^\x00-\x7F]', { param($M) $C = [int][char]$M.Value; "\u$(if ($C -gt 32767) { $C - 65536 } else { $C })?" })
+}
+
+# One line of the notes as RTF: headings, bullets, **bold**.
+function Format-NoteLine([string]$Line) {
+    if ($Line -match '^(#+) (.*)') {
+        $Size = @{ 1 = 30; 2 = 24 }[$Matches[1].Length]; if (-not $Size) { $Size = 21 }
+        return "\pard\sb200\sa60\f1\fs$Size\b\cf2 " + (ConvertTo-Rtf $Matches[2]) + "\b0\par`n"
+    }
+    $Indent = ""
+    if ($Line -match '^\s*- (.*)') { $Line = $Matches[1]; $Indent = "\li360\fi-220 \u8226?\tab " }
+    $Body = (ConvertTo-Rtf $Line) -replace '\*\*(.+?)\*\*', '\b $1\b0 '
+    "\pard\sa50\tx360\f0\fs20\cf1$Indent " + $Body + "\par`n"
+}
+
+# View: "recent", or the index of a version's heading line in $NoteLines. Built as one RTF string: appending to the box
+# piece by piece took seconds for the whole file.
+function Show-Notes($View = "recent") {
+    $Rtf = New-Object Text.StringBuilder
+    [void]$Rtf.Append('{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}{\f1 Georgia;}}')
+    [void]$Rtf.Append("{\colortbl;\red$($Ink.R)\green$($Ink.G)\blue$($Ink.B);\red$($Gold.R)\green$($Gold.G)\blue$($Gold.B);\red$($Dim.R)\green$($Dim.G)\blue$($Dim.B);}`n")
+    $Lines = $NoteLines | Where-Object { $_.Text.Trim() -and $_.Text -notmatch '^# =+\s*$' }
+    if (-not $NoteLines) {
+        [void]$Rtf.Append("\pard\f0\fs20\cf3 No patch notes yet. They come with the next update.\par")
+    }
+    elseif ("recent" -eq $View) {
+        # Changed lines under the headings they sit under (version, section, subsection), each heading once
+        $Since = [DateTimeOffset]::UtcNow.AddDays(-$RecentDays).ToUnixTimeSeconds()
+        $Heads = @{}; $Shown = @{}; $Any = $false
+        foreach ($L in $Lines) {
+            if ($L.Text -match '^(#+) ') {
+                $Level = $Matches[1].Length
+                if ($Level -eq 1 -and $L.Text -notmatch '^# v') { continue }   # the file's title
+                $Heads[$Level] = $L.Text
+                foreach ($K in @($Heads.Keys)) { if ($K -gt $Level) { $Heads.Remove($K) } }
+                foreach ($K in @($Shown.Keys)) { if ($K -ge $Level) { $Shown.Remove($K) } }
+            }
+            elseif ($L.Time -ge $Since) {
+                foreach ($K in @($Heads.Keys | Sort-Object)) {
+                    if (-not $Shown[$K]) { [void]$Rtf.Append((Format-NoteLine $Heads[$K])); $Shown[$K] = $true }
+                }
+                [void]$Rtf.Append((Format-NoteLine $L.Text))
+                $Any = $true
+            }
+        }
+        if (-not $Any) {
+            [void]$Rtf.Append("\pard\f0\fs20\cf3 Nothing has changed in the last $RecentDays days. The buttons below show each version's notes.\par")
+        }
+    }
+    else {
+        for ($I = $View; $I -lt $NoteLines.Count; $I++) {
+            $T = $NoteLines[$I].Text
+            if ($I -gt $View -and $T -match '^# v') { break }
+            if ($T.Trim() -and $T -notmatch '^# =+\s*$') { [void]$Rtf.Append((Format-NoteLine $T)) }
+        }
+    }
+    [void]$Rtf.Append('}')
+    $Notes.Rtf = $Rtf.ToString()
+    foreach ($B in $Views.Controls) { $B.BackColor = if ("$($B.Tag)" -eq "$View") { $Selected } else { $Back } }
 }
 
 function Show-Banner {
@@ -251,7 +310,8 @@ function Complete-Update {
     $Busy.Visible = $false
     $Play.Enabled = $true
     Show-Banner
-    Show-Notes
+    Read-Notes
+    Show-Notes $DefaultView
 }
 
 function Update-Timers {
@@ -285,10 +345,8 @@ try {
     $Gold    = [Drawing.Color]::FromArgb(217, 164, 65)
     $Green   = [Drawing.Color]::FromArgb(120, 190, 100)
     $Red     = [Drawing.Color]::FromArgb(215, 95, 80)
-    $NewBack = [Drawing.Color]::FromArgb(70, 54, 22)
+    $Selected = [Drawing.Color]::FromArgb(70, 54, 22)
     $FontBody = New-Object Drawing.Font("Segoe UI", 10)
-    $FontBold = New-Object Drawing.Font("Segoe UI", 10, [Drawing.FontStyle]::Bold)
-    $FontH1   = New-Object Drawing.Font("Georgia", 15, [Drawing.FontStyle]::Bold)
     $FontH2   = New-Object Drawing.Font("Georgia", 12, [Drawing.FontStyle]::Bold)
 
     $Form = New-Object Windows.Forms.Form
@@ -312,6 +370,13 @@ try {
     $Notes.DetectUrls = $false
     $Notes.Font = $FontBody
     $Form.Controls.Add($Notes)
+
+    # The view buttons under the notes: Last 3 days, then one per version (Read-Notes makes them)
+    $Views = New-Object Windows.Forms.FlowLayoutPanel
+    $Views.Dock = "Bottom"
+    $Views.AutoSize = $true
+    $Views.WrapContents = $true
+    $Form.Controls.Add($Views)
 
     $Bottom = New-Object Windows.Forms.TableLayoutPanel
     $Bottom.Dock = "Bottom"
@@ -350,11 +415,10 @@ try {
     $Top = New-Object Windows.Forms.TableLayoutPanel
     $Top.Dock = "Top"
     $Top.Height = 48
-    $Top.ColumnCount = 4
+    $Top.ColumnCount = 3
     [void]$Top.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("AutoSize")))
     [void]$Top.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("AutoSize")))
     [void]$Top.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("Percent", 100)))
-    [void]$Top.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("AutoSize")))
     $RealmLabel = New-Object Windows.Forms.Label
     $RealmLabel.Text = "Realm"
     $RealmLabel.AutoSize = $true
@@ -369,16 +433,9 @@ try {
     $Server.AutoSize = $true
     $Server.Anchor = "Left"
     $Server.Margin = New-Object Windows.Forms.Padding(16, 0, 0, 0)
-    $NewLabel = New-Object Windows.Forms.Label
-    $NewLabel.Text = "Highlighted: new since you last played"
-    $NewLabel.AutoSize = $true
-    $NewLabel.Anchor = "Right"
-    $NewLabel.ForeColor = $Gold
-    $NewLabel.Visible = $false
     $Top.Controls.Add($RealmLabel, 0, 0)
     $Top.Controls.Add($Realm, 1, 0)
     $Top.Controls.Add($Server, 2, 0)
-    $Top.Controls.Add($NewLabel, 3, 0)
     $Form.Controls.Add($Top)
 
     # Banner: launcher/banner.jpg (or .png) from the addon repo, scaled to fill; the name in big letters until there is one
@@ -414,7 +471,6 @@ try {
     $Play.add_Click({
         try {
             Set-Realm $Branch
-            Save-SeenNotes
             if (Start-Wow) { $Form.Close() }
             else { $Status.Text = "Wow.exe isn't next to Play Grizzle. Put the launcher in your WoW folder." }
         }
@@ -425,7 +481,8 @@ try {
         try {
             Start-Update
             Show-Banner
-            Show-Notes
+            Read-Notes
+            Show-Notes $DefaultView
             Start-ServerCheck
         }
         catch { $Status.Text = "Couldn't update: $($_.Exception.Message)"; $Play.Enabled = $true; $Busy.Visible = $false }

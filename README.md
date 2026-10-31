@@ -17,7 +17,7 @@ The client addon for the Grizzle WoW server, plus a launcher that keeps it up to
    a special Wine prefix, set it in the environment, e.g.
    `GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh`.
 
-On Windows, the launcher opens a window with the patch notes (what's new since you last played is highlighted),
+On Windows, the launcher opens a window with the patch notes (the last 3 days' changes, and each version's notes),
 whether the server is up, and a realm choice: **Grizzle** or **Grizzle Test**. It remembers your choice.
 Each time it runs it downloads the latest addon into `Interface/AddOns/grizzle` and the Grizzle client
 patch into `Data/` for that realm. Press **Play** to start WoW on it. If the download fails, you can
