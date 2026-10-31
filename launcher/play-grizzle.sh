@@ -60,22 +60,23 @@ update() {
     fi
 }
 
-echo "Updating the Grizzle addon ($BRANCH)..."
+# The realm this branch logs in to, and its name before Oct 30 2026
+if [ "$BRANCH" = test ]; then REALM="Veilmoor Test"; OLD_REALM="Grizzle Test"; else REALM="Veilmoor"; OLD_REALM="Grizzle"; fi
+
+echo "Updating for $REALM..."
 if update; then
-    echo "Grizzle addon and client patch are up to date."
+    echo "The addon and client patch are up to date."
     if [ -n "$RERUN" ]; then
         echo "Launcher updated."
         GRIZZLE_UPDATED=1 exec "$SELF" "$@"
     fi
 else
-    echo "WARNING: couldn't update the Grizzle addon or client patch; starting WoW with what you already have." >&2
+    echo "WARNING: couldn't update the addon or client patch; starting WoW with what you already have." >&2
     sleep 3
 fi
 
 # One launcher, one realm: the client patch only matches the server it came with, so pin the realm the client logs
 # in to and tell the addon, which warns if the realm list is used to go elsewhere (doc/grizzle/launcher.md)
-# (OLD_REALM: its name before Oct 30 2026)
-if [ "$BRANCH" = test ]; then REALM="Veilmoor Test"; OLD_REALM="Grizzle Test"; else REALM="Veilmoor"; OLD_REALM="Grizzle"; fi
 pin_realm() {
     local cfg="$WOW_DIR/WTF/Config.wtf" account
     mkdir -p "$WOW_DIR/WTF" || return 1

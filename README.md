@@ -17,8 +17,8 @@ The client addon for the Grizzle WoW server, plus a launcher that keeps it up to
    a special Wine prefix, set it in the environment, e.g.
    `GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh`.
 
-On Windows, the launcher opens a window with the patch notes (the last 3 days' changes, and each version's notes),
-whether the server is up, and a realm choice: **Grizzle** or **Grizzle Test**. It remembers your choice.
+On Windows, the launcher opens a window with the patch notes (the last 3 days' changes, or any version's notes),
+whether the server is up, and a realm choice: **Veilmoor** or **Veilmoor Test**. It remembers your choice.
 Each time it runs it downloads the latest addon into `Interface/AddOns/grizzle` and the Grizzle client
 patch into `Data/` for that realm. Press **Play** to start WoW on it. If the download fails, you can
 still play with what you have. The launcher also updates itself the same way.
@@ -27,7 +27,7 @@ Each realm has its own client patch, so pick the realm in the launcher, not from
 WoW. The addon warns you if the two don't match.
 
 Linux: the launcher plays the realm it played last time. `GRIZZLE_BRANCH=test ./play-grizzle.sh`
-switches to Grizzle Test, `GRIZZLE_BRANCH=main` back to Grizzle.
+switches to Veilmoor Test, `GRIZZLE_BRANCH=main` back to Veilmoor.
 
 ## Manual install
 

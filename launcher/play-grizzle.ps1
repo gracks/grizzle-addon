@@ -9,7 +9,7 @@
 # It updates itself: when the download has a newer play-grizzle.ps1, it replaces this file and runs
 # the new one (-NoSelfUpdate stops that from repeating).
 
-param([string]$Branch = "", [switch]$NoSelfUpdate, [switch]$Console)
+param([string]$Branch = "", [switch]$NoSelfUpdate, [switch]$Console, [switch]$Hidden)
 
 $Repo   = "gracks/grizzle-addon"   # GitHub owner/repo holding the addon
 $Realms = @{ main = "Veilmoor"; test = "Veilmoor Test" }   # the names in the realm list
@@ -41,7 +41,7 @@ function Install-Download($Zip) {
     Expand-Archive -Path $Zip -DestinationPath $Out
     $Src = Get-ChildItem -Path $Out -Directory -Recurse -Filter "grizzle" |
         Where-Object { Test-Path (Join-Path $_.FullName "grizzle.toc") } | Select-Object -First 1
-    if (-not $Src) { throw "the download has no Grizzle addon folder" }
+    if (-not $Src) { throw "the download has no addon folder" }
     $Root = $Src.Parent.FullName
     New-Item -ItemType Directory -Force -Path $AddOns | Out-Null
     if (Test-Path $Addon) { Remove-Item -Recurse -Force $Addon }
@@ -102,12 +102,14 @@ function Start-Wow {
     return $true
 }
 
+# Shows or hides this console window ($null: only compiles the helper, so a later call is instant)
 function Set-ConsoleShown($Show) {
     try {
         Add-Type -Name Console -Namespace GrizzleLauncher -MemberDefinition @'
 [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 '@ -ErrorAction SilentlyContinue
+        if ($null -eq $Show) { return }
         [GrizzleLauncher.Console]::ShowWindow([GrizzleLauncher.Console]::GetConsoleWindow(), $(if ($Show) { 5 } else { 0 })) | Out-Null
     } catch { }
 }
@@ -116,16 +118,16 @@ function Set-ConsoleShown($Show) {
 function Invoke-Console {
     Set-ConsoleShown $true
     try {
-        Write-Host "Updating the Grizzle addon ($Branch)..."
+        Write-Host "Updating for $($Realms[$Branch])..."
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         New-Item -ItemType Directory -Force -Path $TmpRoot | Out-Null
         $Zip = Join-Path $TmpRoot "addon.zip"
         Invoke-WebRequest -UseBasicParsing -Uri (Get-Url $Branch) -OutFile $Zip
         $script:Rerun = Install-Download $Zip
-        Write-Host "Grizzle addon and client patch are up to date."
+        Write-Host "The addon and client patch are up to date."
     }
     catch {
-        Write-Warning "Couldn't update the Grizzle addon or client patch: $($_.Exception.Message)"
+        Write-Warning "Couldn't update the addon or client patch: $($_.Exception.Message)"
         Write-Warning "Starting WoW with what you already have."
         Start-Sleep -Seconds 3
     }
@@ -139,7 +141,7 @@ function Invoke-Console {
     }
     try { Set-Realm $Branch } catch { Write-Warning "Couldn't set the realm to $($Realms[$Branch]): $($_.Exception.Message)" }
     if (-not (Start-Wow)) {
-        Write-Warning "Wow.exe isn't next to this script. Put Play Grizzle in your WoW folder."
+        Write-Warning "Wow.exe isn't next to this script. Put the launcher in your WoW folder."
         Read-Host "Press Enter to close"
         exit 1
     }
@@ -147,6 +149,19 @@ function Invoke-Console {
 }
 
 if ($Console) { Invoke-Console }
+
+# The window needs no console, but hiding the one the .cmd opened fails under Windows Terminal (Windows 11's default),
+# which owns that window. So start again in a classic console (conhost) that opens hidden, and let this one close.
+# Invoke-Console shows the hidden one if the window can't open. If conhost won't start, carry on here.
+if (-not $Hidden) {
+    try {
+        $Args_ = @("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", """$PSCommandPath""",
+            "-Branch", $Branch, "-Hidden")
+        if ($NoSelfUpdate) { $Args_ += "-NoSelfUpdate" }
+        Start-Process -FilePath "conhost.exe" -ArgumentList $Args_ -WindowStyle Hidden -WorkingDirectory $WowDir
+        exit
+    } catch { }
+}
 
 # ---- The window ----
 
@@ -239,10 +254,8 @@ function Show-Notes($View = "recent") {
                 $Any = $true
             }
         }
-        # Nothing recent: say so, then the newest version
         if (-not $Any) {
-            [void]$Rtf.Append("\pard\sa120\f0\fs20\cf3 Nothing new in the last $RecentDays days. The latest notes:\par`n")
-            if ($ViewKeys.Count -gt 1) { Add-Version $Rtf $ViewKeys[1] }
+            [void]$Rtf.Append("\pard\sa120\f0\fs20\cf3 Nothing new in the last $RecentDays days. Pick a version above to read its notes.\par`n")
         }
     }
     else {
@@ -341,7 +354,7 @@ try {
     [Windows.Forms.Application]::EnableVisualStyles()
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     New-Item -ItemType Directory -Force -Path $TmpRoot | Out-Null
-    Set-ConsoleShown $true   # compiles the console helper now, so hiding the console once the window is up is instant
+    Set-ConsoleShown $null   # compiles the console helper now, so hiding the console once the window is up is instant
 
     $Back   = [Drawing.Color]::FromArgb(23, 19, 15)
     $Panel   = [Drawing.Color]::FromArgb(33, 27, 21)
@@ -354,7 +367,7 @@ try {
     $FontH2   = New-Object Drawing.Font("Georgia", 12, [Drawing.FontStyle]::Bold)
 
     $Form = New-Object Windows.Forms.Form
-    $Form.Text = "Play Grizzle"
+    $Form.Text = "Veilmoor"
     # 1248 x 896, or less on a smaller screen
     $Work = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
     $Form.ClientSize = New-Object Drawing.Size([Math]::Min(1248, $Work.Width - 40), [Math]::Min(896, $Work.Height - 80))
@@ -382,7 +395,7 @@ try {
     $Views.Dock = "Top"
     $Views.AutoSize = $true
     $Views.WrapContents = $false
-    $Views.Padding = New-Object Windows.Forms.Padding(0, 0, 0, 8)
+    $Views.Padding = New-Object Windows.Forms.Padding(0, 12, 0, 8)
     $NotesLabel = New-Object Windows.Forms.Label
     $NotesLabel.Text = "Patch notes"
     $NotesLabel.AutoSize = $true
@@ -398,12 +411,15 @@ try {
     $Views.Controls.Add($Pick)
     $Form.Controls.Add($Views)
 
+    # Along the bottom: progress and status on the left; server status, realm and Play on the right
     $Bottom = New-Object Windows.Forms.TableLayoutPanel
     $Bottom.Dock = "Bottom"
     $Bottom.Height = 64
-    $Bottom.ColumnCount = 2
+    $Bottom.ColumnCount = 4
     $Bottom.RowCount = 2
     [void]$Bottom.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("Percent", 100)))
+    [void]$Bottom.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("AutoSize")))
+    [void]$Bottom.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("AutoSize")))
     [void]$Bottom.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("AutoSize")))
     $Busy = New-Object Windows.Forms.ProgressBar
     $Busy.Style = "Marquee"
@@ -415,6 +431,15 @@ try {
     $Status.ForeColor = $Dim
     $Status.TextAlign = "TopLeft"
     $Status.Margin = New-Object Windows.Forms.Padding(0, 4, 16, 0)
+    $Server = New-Object Windows.Forms.Label
+    $Server.AutoSize = $true
+    $Server.Margin = New-Object Windows.Forms.Padding(0, 28, 12, 0)
+    $Realm = New-Object Windows.Forms.ComboBox
+    $Realm.DropDownStyle = "DropDownList"
+    $Realm.Width = 160
+    $Realm.Margin = New-Object Windows.Forms.Padding(0, 25, 12, 0)
+    [void]$Realm.Items.AddRange(@($Realms.main, $Realms.test))
+    $Realm.SelectedIndex = $(if ($Branch -eq "test") { 1 } else { 0 })
     $Play = New-Object Windows.Forms.Button
     $Play.Text = "Play"
     $Play.Font = $FontH2
@@ -427,36 +452,12 @@ try {
     $Play.Enabled = $false
     $Bottom.Controls.Add($Busy, 0, 0)
     $Bottom.Controls.Add($Status, 0, 1)
-    $Bottom.Controls.Add($Play, 1, 0)
-    $Bottom.SetRowSpan($Play, 2)
+    $Bottom.Controls.Add($Server, 1, 0)
+    $Bottom.Controls.Add($Realm, 2, 0)
+    $Bottom.Controls.Add($Play, 3, 0)
+    foreach ($C in $Server, $Realm, $Play) { $Bottom.SetRowSpan($C, 2) }
     $Form.Controls.Add($Bottom)
     $Form.AcceptButton = $Play
-
-    $Top = New-Object Windows.Forms.TableLayoutPanel
-    $Top.Dock = "Top"
-    $Top.Height = 48
-    $Top.ColumnCount = 3
-    [void]$Top.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("AutoSize")))
-    [void]$Top.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("AutoSize")))
-    [void]$Top.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle("Percent", 100)))
-    $RealmLabel = New-Object Windows.Forms.Label
-    $RealmLabel.Text = "Realm"
-    $RealmLabel.AutoSize = $true
-    $RealmLabel.Anchor = "Left"
-    $Realm = New-Object Windows.Forms.ComboBox
-    $Realm.DropDownStyle = "DropDownList"
-    $Realm.Width = 160
-    $Realm.Anchor = "Left"
-    [void]$Realm.Items.AddRange(@($Realms.main, $Realms.test))
-    $Realm.SelectedIndex = $(if ($Branch -eq "test") { 1 } else { 0 })
-    $Server = New-Object Windows.Forms.Label
-    $Server.AutoSize = $true
-    $Server.Anchor = "Left"
-    $Server.Margin = New-Object Windows.Forms.Padding(16, 0, 0, 0)
-    $Top.Controls.Add($RealmLabel, 0, 0)
-    $Top.Controls.Add($Realm, 1, 0)
-    $Top.Controls.Add($Server, 2, 0)
-    $Form.Controls.Add($Top)
 
     # Banner: launcher/banner.jpg (or .png) from the addon repo, scaled to fill; the name in big letters until there is one
     $Banner = New-Object Windows.Forms.PictureBox
@@ -470,7 +471,7 @@ try {
         if ($Banner.Image) { return }
         $Flags = [Windows.Forms.TextFormatFlags]"HorizontalCenter, VerticalCenter"
         $Big = New-Object Drawing.Font("Georgia", 44, [Drawing.FontStyle]::Bold)
-        [Windows.Forms.TextRenderer]::DrawText($E.Graphics, "GRIZZLE", $Big, $Banner.ClientRectangle, $Gold, $Flags)
+        [Windows.Forms.TextRenderer]::DrawText($E.Graphics, "VEILMOOR", $Big, $Banner.ClientRectangle, $Gold, $Flags)
         $Big.Dispose()
     })
     $Form.Controls.Add($Banner)
@@ -492,7 +493,7 @@ try {
         try {
             Set-Realm $Branch
             if (Start-Wow) { $Form.Close() }
-            else { $Status.Text = "Wow.exe isn't next to Play Grizzle. Put the launcher in your WoW folder." }
+            else { $Status.Text = "Wow.exe isn't next to the launcher. Put it in your WoW folder." }
         }
         catch { $Status.Text = "Couldn't start WoW: $($_.Exception.Message)" }
     })
@@ -518,6 +519,6 @@ $Timer.Stop()
 if ($script:Download) { $script:Download.Web.CancelAsync() }
 Remove-Item -Recurse -Force $TmpRoot -ErrorAction SilentlyContinue
 if ($Rerun) {
-    & $PSCommandPath -Branch $Branch -NoSelfUpdate
+    & $PSCommandPath -Branch $Branch -NoSelfUpdate -Hidden
 }
 exit
