@@ -141,10 +141,11 @@ if ($Console) { Invoke-Console }
 
 # Patch notes: PATCHNOTES.md from the last download. The window opens on the lines changed in the last 3 days (the
 # times come from PATCHNOTES.dates, one per line, which publish-addon.sh makes from git blame) under their headings,
-# and a button per version ("# v1.2 ..." headings) shows that version's notes.
+# and the dropdown above them picks a version's notes instead ("# v1.2 ..." headings), newest first.
 $RecentDays = 3
 
-# Reads the notes into $NoteLines (Text, Time; Time 0 without dates) and makes a button per view.
+# Reads the notes into $NoteLines (Text, Time; Time 0 without dates) and fills the dropdown: Last 3 days, then each
+# version. Selecting Last 3 days at the end shows it (the dropdown's change event draws the notes).
 function Read-Notes {
     $script:NoteLines = @()
     $Path = Join-Path $Addon "PATCHNOTES.md"
@@ -157,29 +158,26 @@ function Read-Notes {
             @{ Text = $Lines[$I]; Time = $(if ($Dates) { [long]$Dates[$I] } else { 0 }) }
         })
     }
-    $Views.Controls.Clear()
-    $script:DefaultView = "recent"
-    if ($NoteLines | Where-Object { $_.Time }) { Add-ViewButton "Last $RecentDays days" "recent" }
+    # $ViewKeys: what each dropdown item shows ("recent", or the line index of a version's heading)
+    $script:ViewKeys = @("recent")
+    $Pick.Items.Clear()
+    [void]$Pick.Items.Add("Last $RecentDays days")
     for ($I = 0; $I -lt $NoteLines.Count; $I++) {
         if ($NoteLines[$I].Text -match '^# (v\S+)') {
-            Add-ViewButton $Matches[1] $I
+            [void]$Pick.Items.Add($Matches[1])
+            $script:ViewKeys += $I
         }
     }
-    # Without dates, open on the newest version
-    if (-not ($NoteLines | Where-Object { $_.Time }) -and $Views.Controls.Count) { $script:DefaultView = $Views.Controls[0].Tag }
+    $Pick.SelectedIndex = 0
 }
 
-function Add-ViewButton($Label, $View) {
-    $B = New-Object Windows.Forms.Button
-    $B.Text = $Label
-    $B.Tag = $View
-    $B.AutoSize = $true
-    $B.FlatStyle = "Flat"
-    $B.FlatAppearance.BorderColor = $Dim
-    $B.ForeColor = $Ink
-    $B.Margin = New-Object Windows.Forms.Padding(0, 8, 8, 0)
-    $B.add_Click({ param($S, $E) try { Show-Notes $S.Tag } catch { $Status.Text = $_.Exception.Message } })
-    $Views.Controls.Add($B)
+# A version's notes, from its heading (line index) to the next version
+function Add-Version($Rtf, [int]$Start) {
+    for ($I = $Start; $I -lt $NoteLines.Count; $I++) {
+        $T = $NoteLines[$I].Text
+        if ($I -gt $Start -and $T -match '^# v') { break }
+        if ($T.Trim() -and $T -notmatch '^# =+\s*$') { [void]$Rtf.Append((Format-NoteLine $T)) }
+    }
 }
 
 # RTF text: escapes, and characters past ASCII as \u codes
@@ -230,20 +228,17 @@ function Show-Notes($View = "recent") {
                 $Any = $true
             }
         }
+        # Nothing recent: say so, then the newest version
         if (-not $Any) {
-            [void]$Rtf.Append("\pard\f0\fs20\cf3 Nothing has changed in the last $RecentDays days. The buttons below show each version's notes.\par")
+            [void]$Rtf.Append("\pard\sa120\f0\fs20\cf3 Nothing new in the last $RecentDays days. The latest notes:\par`n")
+            if ($ViewKeys.Count -gt 1) { Add-Version $Rtf $ViewKeys[1] }
         }
     }
     else {
-        for ($I = $View; $I -lt $NoteLines.Count; $I++) {
-            $T = $NoteLines[$I].Text
-            if ($I -gt $View -and $T -match '^# v') { break }
-            if ($T.Trim() -and $T -notmatch '^# =+\s*$') { [void]$Rtf.Append((Format-NoteLine $T)) }
-        }
+        Add-Version $Rtf $View
     }
     [void]$Rtf.Append('}')
     $Notes.Rtf = $Rtf.ToString()
-    foreach ($B in $Views.Controls) { $B.BackColor = if ("$($B.Tag)" -eq "$View") { $Selected } else { $Back } }
 }
 
 function Show-Banner {
@@ -311,7 +306,6 @@ function Complete-Update {
     $Play.Enabled = $true
     Show-Banner
     Read-Notes
-    Show-Notes $DefaultView
 }
 
 function Update-Timers {
@@ -345,13 +339,14 @@ try {
     $Gold    = [Drawing.Color]::FromArgb(217, 164, 65)
     $Green   = [Drawing.Color]::FromArgb(120, 190, 100)
     $Red     = [Drawing.Color]::FromArgb(215, 95, 80)
-    $Selected = [Drawing.Color]::FromArgb(70, 54, 22)
     $FontBody = New-Object Drawing.Font("Segoe UI", 10)
     $FontH2   = New-Object Drawing.Font("Georgia", 12, [Drawing.FontStyle]::Bold)
 
     $Form = New-Object Windows.Forms.Form
     $Form.Text = "Play Grizzle"
-    $Form.ClientSize = New-Object Drawing.Size(780, 640)
+    # 1248 x 896, or less on a smaller screen
+    $Work = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $Form.ClientSize = New-Object Drawing.Size([Math]::Min(1248, $Work.Width - 40), [Math]::Min(896, $Work.Height - 80))
     $Form.MinimumSize = New-Object Drawing.Size(560, 480)
     $Form.StartPosition = "CenterScreen"
     $Form.BackColor = $Back
@@ -371,11 +366,25 @@ try {
     $Notes.Font = $FontBody
     $Form.Controls.Add($Notes)
 
-    # The view buttons under the notes: Last 3 days, then one per version (Read-Notes makes them)
+    # Above the notes, the dropdown picking what they show: Last 3 days, then each version (Read-Notes fills it)
     $Views = New-Object Windows.Forms.FlowLayoutPanel
-    $Views.Dock = "Bottom"
+    $Views.Dock = "Top"
     $Views.AutoSize = $true
-    $Views.WrapContents = $true
+    $Views.WrapContents = $false
+    $Views.Padding = New-Object Windows.Forms.Padding(0, 0, 0, 8)
+    $NotesLabel = New-Object Windows.Forms.Label
+    $NotesLabel.Text = "Patch notes"
+    $NotesLabel.AutoSize = $true
+    $NotesLabel.Margin = New-Object Windows.Forms.Padding(0, 7, 8, 0)
+    $Pick = New-Object Windows.Forms.ComboBox
+    $Pick.DropDownStyle = "DropDownList"
+    $Pick.Width = 160
+    $Pick.add_SelectedIndexChanged({
+        try { if ($Pick.SelectedIndex -ge 0) { Show-Notes $ViewKeys[$Pick.SelectedIndex] } }
+        catch { $Status.Text = $_.Exception.Message }
+    })
+    $Views.Controls.Add($NotesLabel)
+    $Views.Controls.Add($Pick)
     $Form.Controls.Add($Views)
 
     $Bottom = New-Object Windows.Forms.TableLayoutPanel
@@ -482,7 +491,6 @@ try {
             Start-Update
             Show-Banner
             Read-Notes
-            Show-Notes $DefaultView
             Start-ServerCheck
         }
         catch { $Status.Text = "Couldn't update: $($_.Exception.Message)"; $Play.Enabled = $true; $Busy.Visible = $false }
