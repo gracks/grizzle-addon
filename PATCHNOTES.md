@@ -1,7 +1,7 @@
-# "Grizzle" Realm Patchnotes
+# "Veilmoor" Realm Patchnotes
 
 # ================================================================================
-# v1.2 (upcoming)
+# v1.2 (10/30/2026)
 # ================================================================================
 
 ## At a Glance
@@ -15,7 +15,7 @@
 - Death leaves part of your XP in a tombstone to win back, and a mark from whatever killed you
 - The two sides are enemies again, unless a friend from the other side vouches for you
 
-## The Wilds Hit Back
+## Mobs Hit Harder
 - **Tougher mobs:** normal mobs have 80% more health than stock (was 20%) and deal 15% more damage (was 20%)
 - **Low levels hit harder:** up to about 2.5x as hard at level 1, back to normal by level 15
 - **Bigger damage swings:** mob hits vary a lot more
@@ -27,7 +27,7 @@
 - **Poisons** from mobs in the open world do twice the damage
 - **Fall damage** starts lower and hits 40% harder
 
-## Mobs Fight Like They Mean It
+## How Mobs Fight
 - **Longer chases:** mobs give up only after 3 minutes without damage
 - **More adds:** mobs call for help from a little further, the same kind always help each other, and neutral creatures defend their own
 - **Gray mobs leave you alone,** unless you sit down near one
@@ -40,7 +40,7 @@
 - **Sneak by night:** at night mobs notice you from 25% closer
 - **Safe graveyards:** no hostile mobs within 30 yards of a spirit healer
 
-## Every Kill Feeds Your Pack
+## Loot and Crafting
 
 ### Loot
 - Mobs drop crafting materials that fit what they are: beasts their meat, fangs and hides, humanoids cloth every time, elementals their element. Elites drop more, rares always drop the rare stuff
@@ -54,7 +54,7 @@
 - **Potions work like vanilla:** a 2-minute cooldown that starts when you drink, not when the fight ends
 - World drop rates: greens 1.5 -> 1.2, blues 1.5 -> 1.0, epics 1.5 -> 1.2
 
-### Gear Worth Crafting
+### Crafting
 - Crafted armor gets **+15% stats and armor**, crafted weapons up to 15% more damage, and all of it is **Bind on Equip** so you can make gear for friends
 - **91 new recipes** fill the gaps in Leatherworking, Tailoring, Blacksmithing, Enchanting, Engineering and Inscription
 - **11 crafted weapons** have effects now: Rend, poison, slows, an extra attack and more
@@ -66,11 +66,11 @@
 - **Elites** drop the rewards of the quests that send you after them. Farmable elites drop them 10% of the time
 - **Normal mobs** can drop the gear rewards of their quests, including the quests that were removed
 
-## Giants on the Horizon
+## Roamers
 - **Roamers:** oversized monsters well above the zone's level walk set routes through every leveling zone (elites in Northrend). Spot them before they spot you. Each drops a guaranteed green or blue, a trophy and good money
 - **Valley roamers:** one level 12-13 roamer in each starting zone's 5-10 country, each with a big move of its own
 
-## Weather You Plan Around
+## Days, Seasons and Weather
 - **2-hour days:** a full day and night take 2 hours instead of 24
 - **Weather everywhere,** fitting the land: thunderstorms in jungles and swamps, sandstorms across the deserts, snow in the cold north, fog thick in haunted places and closing in with rain
 - **Drenched:** rain or swimming soaks you. Fire hurts you 10% less, frost and nature 10% more, and health regenerates 35% slower. A campfire dries you, and an oiled cloak keeps the worst of it off
@@ -83,13 +83,13 @@
 - **Fireflies** come out on some evenings in green and tropical zones, most often in summer
 - **Weather on your screen:** frost, raindrops, storm dark and blowing sand at the screen's edges
 
-### Braving the Storm
+### What Weather and Night Bring
 - Spells of the weather's element deal 5% more damage (frost in snow, nature in storms, fire in sandstorms)
 - Storms drop elemental materials from kills, grow richer herbs and veins, and bring creatures of their own: Storm Spirits, Snowdrifts, Sand Devils, Rainwalkers
 - **Fishing** changes with the weather and the hour (some fish bite only at night or by day). Storms wash up wreckage to fish for, your line sometimes brings up a Waterlogged Satchel, and the town criers hear about trophy catches
 - Some herbs loot better at night, and beasts skinned in heavy snow give more hides
 
-## Rest Is Part of the Journey
+## Rest and Recovery
 - **Sit to recover:** out of combat, health returns at 30% of its old rate standing and 80% sitting; mana at 30% standing and 80% sitting
 - **Spirit matters:** Spirit from gear restores 2.5x as much mana and 60% more health
 - **Slower at low levels:** health regen starts at a fifth of normal, mana at half
@@ -99,7 +99,7 @@
 - **Food matters:** a cooked meal gives an hour of Well Fed: more health, and a stat that depends on the dish. Bought and dropped food heals more slowly and gives no buff. Mages no longer conjure food and water
 - **Class buffs last twice as long** (Fortitude, Mark of the Wild, Arcane Intellect, Blessings...)
 
-## A Bigger World
+## Travel
 - **No flight paths,** no flight masters
 - **No minimap:** a compass across the top instead, and the world map no longer shows where you are
 - **Fewer portals:** most portals between the capitals, Shattrath and Dalaran are gone. Take the boat, the zeppelin or the road
@@ -112,13 +112,13 @@
 - **Riding at 40 and 60** (death knights included), ground mounts half as fast, and no flying mounts
 - **Town criers** in every town share the local news: storms, wanted goods, dangerous sightings and who brought them down
 
-## Faster Leveling
+## XP
 - XP from kills: 1.3 -> 1.8
 - Group bonuses: 2 players 1.25, 3 players 1.45, 4 players 1.65, 5 players 1.85 (was 1.0 to 1.4)
 - Rares give 3x XP, and your first kill of each kind of creature gives 3x
 - XP from gathering, crafting, fishing, exploring (3x) and your first clear of each dungeon
 
-## Class Quests That Teach
+## Classes
 - **Mages:** Glint instead of Slip: for 0.75 seconds physical hits do 80% less, and catching one lets your next spell hit form a Mana Stone. The level 10 class quest teaches Evocation. Each school's first spell comes with a passive: Smolder (Fireball stacks for Fire Blast), Gathering Cold (a stronger Frostbolt the longer you wait) and Brimming Mana (stronger Arcane Missiles above half mana)
 - **Paladins:** Ward of Light instead of Slip: for 0.75 seconds physical hits do 80% less, and catching one leaves Lingering Light, a heal that Holy Light or Flash of Light brings in at once
 
@@ -128,17 +128,17 @@
 - **Shades:** what waits for you is a faint, kneeling copy of you in the gear you died in
 - **The mark of your death:** whatever killed you leaves one of 19 marks for an hour, or until you reclaim what you left: Raw Burns from fire, Hamstrung from wolves, Haunted from shadow (no hearthing), and more
 
-## You Sound Like You Feel
+## Speech
 What happens to you comes through in what you say: a polymorphed player bleats, a silenced one mumbles, a feared one stammers, a cold one's teeth chatter, and a badly hurt one winces.
 
-## The Other Side
+## Horde and Alliance
 - The Horde and Alliance are enemies again: the other side's guards attack on sight. Cross-faction parties and chat still work
 - **Vouched for:** with a party member from the other side close by, their people will trade with you, train you and give you quests
 - **Shady Dealers** just outside eight towns sell the basics to the other side, and repair
 - **Wandering tutors** train Horde classes near Goldshire (1-10) and in Westfall (11-20)
 - Hearthstones set at the other side's inns now take you home
 
-## Find Your Own Way
+## Quests and Finds
 - No Dungeon Finder, quest markers, sparkling quest objects, or Find Herbs, Minerals, Treasure and Fish
 - **Fewer, better quests:** about 3,900 open-world quests are gone, and every daily and weekly quest outside the Argent Tournament. Each zone keeps its best two storylines per faction and level range. Quests in your log can still be finished
 - **Treasure maps and bottles:** riddle maps from bandits and gnolls, or washed up on the shore, lead to buried strongboxes

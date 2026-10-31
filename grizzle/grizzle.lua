@@ -482,3 +482,7 @@ trackingFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
 trackingFrame:RegisterEvent("MINIMAP_UPDATE_TRACKING");
 trackingFrame:RegisterEvent("SPELLS_CHANGED");
 trackingFrame:SetScript("OnEvent", UpdateTracking);
+
+-- Logout countdown: the client counts down from a hard-coded 20, the server logs out after LogoutTimer (10)
+StaticPopupDialogs["CAMP"].timeout = 10;
+StaticPopupDialogs["QUIT"].timeout = 10;
