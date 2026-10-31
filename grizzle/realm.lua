@@ -17,8 +17,8 @@ events:SetScript("OnEvent", function()
         return;
     end
     local text = "You started WoW with the launcher set to " .. expected .. ", but you're on " .. realm
-        .. ". Some spells and items will be missing or wrong. Quit WoW, start Play Grizzle and pick "
+        .. ". Some spells and items will be missing or wrong. Quit WoW, start the launcher and pick "
         .. ((realm == "Veilmoor" or realm == "Veilmoor Test") and realm or "the realm you want") .. ".";
-    DEFAULT_CHAT_FRAME:AddMessage("|cffff4040Grizzle:|r " .. text);
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff4040Veilmoor:|r " .. text);
     StaticPopup_Show("GRIZZLE_WRONG_REALM", text);
 end);

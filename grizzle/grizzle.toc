@@ -1,5 +1,5 @@
 ## Interface: 30300
-## Title: Grizzle
+## Title: Veilmoor
 ## Notes: Custom tooltip overrides for cold system and campfire
 ## Version: 1.0
 ## SavedVariablesPerCharacter: GrizzleTombstone
