@@ -10,3 +10,5 @@ death.lua
 wanted.lua
 weather.lua
 food.lua
+launcher.lua
+realm.lua

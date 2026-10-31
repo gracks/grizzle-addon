@@ -305,35 +305,95 @@ hooksecurefunc(GameTooltip, "SetUnitDebuff", function(self, unit, index, filter)
     AddMarkerText(self, unit, select(11, UnitDebuff(unit, index, filter)));
 end);
 
--- Weather markers (Drenched, Snowbound, Sandblasted) come and go on every mob in the weather, so
--- the combat log only reports them on players. Wraps Blizzard_CombatLog's CombatLog_AddEvent
--- (3.3.5: timestamp, event, srcGUID, srcName, srcFlags, dstGUID, dstName, dstFlags, spellId, ...).
--- Switching combat log filters re-reads the log without this wrapper, so old lines can reappear then.
-local WEATHER_MARKERS = { [WET_SPELL_ID] = true, [90000] = true, [90001] = true };
+-- Weather markers (Drenched, Snowbound, Sandblasted, Charged Air) come and go on every mob in the weather, so
+-- the combat log only reports them on players: they would give away what's nearby. Wraps Blizzard_CombatLog's
+-- CombatLog_AddEvent (3.3.5: timestamp, event, srcGUID, srcName, srcFlags, dstGUID, dstName, dstFlags, spellId, ...)
+-- for new lines, and COMBATLOG:AddMessage while the log refilters (redraws its history after a filter or settings
+-- change), when the line being drawn is still CombatLogGetCurrentEntry().
+local WEATHER_MARKERS = { [WET_SPELL_ID] = true, [90000] = true, [90001] = true, [90060] = true };
 local MARKER_LOG_EVENTS = { SPELL_AURA_APPLIED = true, SPELL_AURA_REMOVED = true, SPELL_AURA_REFRESH = true };
+
+local function IsHiddenMarkerEvent(...)
+    local _, event, _, _, _, _, _, dstFlags, spellId = ...;
+    return MARKER_LOG_EVENTS[event] and WEATHER_MARKERS[spellId]
+        and bit.band(dstFlags or 0, COMBATLOG_OBJECT_TYPE_PLAYER) == 0;
+end
+
+local addingLiveEvent = false;
 
 local function HookCombatLog()
     if type(CombatLog_AddEvent) ~= "function" or CombatLog_AddEvent_Grizzle then return end
     CombatLog_AddEvent_Grizzle = CombatLog_AddEvent;
     CombatLog_AddEvent = function(...)
-        local _, event, _, _, _, _, _, dstFlags, spellId = ...;
-        if MARKER_LOG_EVENTS[event] and WEATHER_MARKERS[spellId]
-            and bit.band(dstFlags or 0, COMBATLOG_OBJECT_TYPE_PLAYER) == 0 then
-            return;
-        end
-        return CombatLog_AddEvent_Grizzle(...);
+        if IsHiddenMarkerEvent(...) then return; end
+        -- a new line can arrive mid-refilter; it isn't the current entry, so AddMessage mustn't check it
+        addingLiveEvent = true;
+        local ok, err = pcall(CombatLog_AddEvent_Grizzle, ...);
+        addingLiveEvent = false;
+        if not ok then error(err, 0); end
     end
+    if COMBATLOG and CombatLogUpdateFrame then
+        local addMessage = COMBATLOG.AddMessage;
+        COMBATLOG.AddMessage = function(self, ...)
+            if CombatLogUpdateFrame.refiltering and not addingLiveEvent
+                and IsHiddenMarkerEvent(CombatLogGetCurrentEntry()) then
+                return;
+            end
+            return addMessage(self, ...);
+        end
+    end
+end
+
+-- The combat log always shows everything: its quick-button bar (Self, Everything, What happened to me?) is hidden,
+-- since a stray click there left a player wondering why half the fight was missing, and its room goes to log lines
+-- (Greg's playtest, Oct 28 2026).
+local function SimplifyCombatLog()
+    local bar = CombatLogQuickButtonFrame_Custom;
+    if bar and not bar.grizzleHidden then
+        bar.grizzleHidden = true;
+        bar:Hide();
+        bar:HookScript("OnShow", bar.Hide);
+        -- Blizzard_CombatLog drops the log's top edge (and lifts its background) by the bar's height, hidden or
+        -- not, whenever FCF_DockUpdate runs; with the bar flat the log's text starts at the top
+        bar:SetHeight(0.001);
+        if type(FCF_DockUpdate) == "function" then
+            FCF_DockUpdate();
+        end
+        -- FCF_SetButtonSide raises the log's button column (scroll buttons) by the bar's height too, and Blizzard_CombatLog
+        -- places it while the bar is still full height; without this the column stuck up past the log's top edge
+        if type(FCF_SetButtonSide) == "function" and COMBATLOG and COMBATLOG.buttonSide then
+            FCF_SetButtonSide(COMBATLOG, COMBATLOG.buttonSide, true);
+        end
+    end
+    local filters = Blizzard_CombatLog_Filters and Blizzard_CombatLog_Filters.filters;
+    if filters and type(Blizzard_CombatLog_QuickButton_OnClick) == "function" then
+        for i, filter in ipairs(filters) do
+            if filter.name == QUICKBUTTON_NAME_EVERYTHING then
+                if Blizzard_CombatLog_Filters.currentFilter ~= i then
+                    Blizzard_CombatLog_QuickButton_OnClick(i);
+                end
+                break;
+            end
+        end
+    end
+end
+
+local function SetUpCombatLog()
+    HookCombatLog();
+    SimplifyCombatLog();
 end
 
 local combatLogFrame = CreateFrame("Frame");
 combatLogFrame:RegisterEvent("ADDON_LOADED");
+combatLogFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
 combatLogFrame:SetScript("OnEvent", function(self, event, addonName)
-    if addonName == "Blizzard_CombatLog" then
-        HookCombatLog();
-        self:UnregisterEvent("ADDON_LOADED");
+    if event == "PLAYER_ENTERING_WORLD" then
+        if IsAddOnLoaded("Blizzard_CombatLog") then SimplifyCombatLog(); end
+    elseif addonName == "Blizzard_CombatLog" then
+        SetUpCombatLog();
     end
 end);
-if IsAddOnLoaded("Blizzard_CombatLog") then HookCombatLog(); end
+if IsAddOnLoaded("Blizzard_CombatLog") then SetUpCombatLog(); end
 
 -- Minimap tracking: only tracking spells you know (Find Herbs, Find Minerals, Hunter tracks...).
 -- Town tracking (banker, mailbox, trainers, flight master...) is gone: players find those in the

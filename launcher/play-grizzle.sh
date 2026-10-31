@@ -5,14 +5,24 @@
 # How WoW is started can be changed without editing this file, e.g.:
 #   GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh
 #   WINEPREFIX=~/games/wow ./play-grizzle.sh
-# To get the addon being tested on the Test realm: GRIZZLE_BRANCH=test ./play-grizzle.sh
+# To play on the Test realm: GRIZZLE_BRANCH=test ./play-grizzle.sh (GRIZZLE_BRANCH=main to go back). Without it,
+# it plays the realm it played last time. Each branch logs in to its own realm (Veilmoor or Veilmoor Test), since the
+# client patch only matches that server.
 # It updates itself: when the download has a newer play-grizzle.sh, it replaces this file and runs
 # the new one (GRIZZLE_UPDATED=1 stops that from repeating).
 
 REPO="gracks/grizzle-addon"   # GitHub owner/repo holding the addon
-BRANCH="${GRIZZLE_BRANCH:-main}"
 
 WOW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# No GRIZZLE_BRANCH: the realm the last launch pinned
+if [ -n "$GRIZZLE_BRANCH" ]; then
+    BRANCH="$GRIZZLE_BRANCH"
+elif grep -Eq '^SET realmName "(Veilmoor|Grizzle) Test"' "$WOW_DIR/WTF/Config.wtf" 2>/dev/null; then
+    BRANCH=test
+else
+    BRANCH=main
+fi
+export GRIZZLE_BRANCH="$BRANCH"   # the updated script, if it reruns, plays the same realm
 ADDONS="$WOW_DIR/Interface/AddOns"
 PATCH="patch-G.MPQ"
 URL="https://github.com/$REPO/archive/refs/heads/$BRANCH.zip"
@@ -50,17 +60,40 @@ update() {
     fi
 }
 
-echo "Updating the Grizzle addon ($BRANCH)..."
+# The realm this branch logs in to, and its name before Oct 30 2026
+if [ "$BRANCH" = test ]; then REALM="Veilmoor Test"; OLD_REALM="Grizzle Test"; else REALM="Veilmoor"; OLD_REALM="Grizzle"; fi
+
+echo "Updating for $REALM..."
 if update; then
-    echo "Grizzle addon and client patch are up to date."
+    echo "The addon and client patch are up to date."
     if [ -n "$RERUN" ]; then
         echo "Launcher updated."
         GRIZZLE_UPDATED=1 exec "$SELF" "$@"
     fi
 else
-    echo "WARNING: couldn't update the Grizzle addon or client patch; starting WoW with what you already have." >&2
+    echo "WARNING: couldn't update the addon or client patch; starting WoW with what you already have." >&2
     sleep 3
 fi
+
+# One launcher, one realm: the client patch only matches the server it came with, so pin the realm the client logs
+# in to and tell the addon, which warns if the realm list is used to go elsewhere (doc/grizzle/launcher.md)
+pin_realm() {
+    local cfg="$WOW_DIR/WTF/Config.wtf" account
+    mkdir -p "$WOW_DIR/WTF" || return 1
+    { [ -f "$cfg" ] && grep -v '^SET realmName ' "$cfg"; printf 'SET realmName "%s"\r\n' "$REALM"; } > "$cfg.new" \
+        && mv -f "$cfg.new" "$cfg" || return 1
+    if [ -d "$ADDONS/grizzle" ]; then
+        printf 'GrizzleLauncherRealm = "%s";\n' "$REALM" > "$ADDONS/grizzle/launcher.lua" || return 1
+    fi
+    # The client keeps each character's macros, bindings and saved variables under WTF/Account/<account>/<realm>, so
+    # carry them over from the realm's old name
+    for account in "$WOW_DIR"/WTF/Account/*/; do
+        if [ -d "$account$OLD_REALM" ] && [ ! -e "$account$REALM" ]; then
+            mv "$account$OLD_REALM" "$account$REALM" || return 1
+        fi
+    done
+}
+pin_realm || echo "WARNING: couldn't set the realm to $REALM." >&2
 
 # Item cache: the server changes item stats, and the client shows its cached copy until this is gone.
 # WoW rebuilds it as you play.

@@ -17,18 +17,17 @@ The client addon for the Grizzle WoW server, plus a launcher that keeps it up to
    a special Wine prefix, set it in the environment, e.g.
    `GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh`.
 
-Each time it runs, the launcher downloads the latest addon into `Interface/AddOns/grizzle` (and
-the Grizzle client patch into `Data/`, when there is one), then starts WoW. If the download fails,
-it starts WoW with the versions you already have. The launcher also updates itself the same way.
+On Windows, the launcher opens a window with the patch notes (the last 3 days' changes, or any version's notes),
+whether the server is up, and a realm choice: **Veilmoor** or **Veilmoor Test**. It remembers your choice.
+Each time it runs it downloads the latest addon into `Interface/AddOns/grizzle` and the Grizzle client
+patch into `Data/` for that realm. Press **Play** to start WoW on it. If the download fails, you can
+still play with what you have. The launcher also updates itself the same way.
 
-There's no client patch at the moment. If you have a `Data/patch-G.MPQ` from an earlier version,
-you can delete it; it doesn't do anything.
+Each realm has its own client patch, so pick the realm in the launcher, not from the realm list in
+WoW. The addon warns you if the two don't match.
 
-## Testing (Test realm)
-
-To try the addon version being tested on the Test realm, also download `launcher/play-grizzle-test.cmd`
-into the WoW folder and start the game with it (Linux: `GRIZZLE_BRANCH=test ./play-grizzle.sh`).
-Go back to the normal launcher for the main realm; it puts the regular version back.
+Linux: the launcher plays the realm it played last time. `GRIZZLE_BRANCH=test ./play-grizzle.sh`
+switches to Veilmoor Test, `GRIZZLE_BRANCH=main` back to Veilmoor.
 
 ## Manual install
 

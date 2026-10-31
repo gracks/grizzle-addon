@@ -73,8 +73,17 @@ local function SetTargets()
     -- 0 at the lightest weather the client shows (grade 0.27), 1 at the heaviest
     local t = Ramp(grade, 0.27, 1);
     if kind == "snow" then
-        frostLight.target = 0.5 + 0.5 * t;
-        frostHeavy.target = Ramp(t, 0.3, 1);
+        -- frost goes up in steps with the client's light, medium and heavy snow: a faint rim in light snow, a clear
+        -- jump as medium snow brings Snowbound, full frost in heavy snow (the layers' speeds smooth each step)
+        if grade < 0.40 then
+            frostLight.target = 0.25;
+        elseif grade < 0.70 then
+            frostLight.target = 0.8;
+            frostHeavy.target = 0.3;
+        else
+            frostLight.target = 1;
+            frostHeavy.target = 0.8;
+        end
     elseif kind == "rain" then
         mistLight.target = MIST * (0.5 + 0.2 * t);
         mistHeavy.target = MIST * Ramp(t, 0.3, 1) * 0.6;
@@ -139,6 +148,59 @@ events:SetScript("OnEvent", function(self, event, prefix, message, channel)
     kind = newKind or "";
     grade = (tonumber(newGrade) or 0) / 100;
     SetTargets();
+end);
+
+-- Lightning (doc/grizzle/weather.md "Lightning strikes"): the server whispers "GRZ_BOLT" <struck|arc|near> to players
+-- within 60 yd of a strike, along with the thunderclap. The screen flashes white twice, the way lightning flickers,
+-- brightest for the one struck, who also reads what hit them (Greg's playtest, Oct 28 2026: nobody could tell).
+local BOLT_PREFIX = "GRZ_BOLT";
+local BOLT_PEAK = { struck = 0.85, arc = 0.6, near = 0.35 };
+local BOLT_TIME = 0.8;                  -- seconds from the first flash to dark
+
+local bolt = CreateFrame("Frame", nil, WorldFrame);
+bolt:SetAllPoints(WorldFrame);
+bolt:SetFrameStrata("HIGH");
+bolt:EnableMouse(false);
+local boltTexture = bolt:CreateTexture(nil, "OVERLAY");
+boltTexture:SetAllPoints(bolt);
+boltTexture:SetTexture(0.9, 0.95, 1);
+bolt:Hide();
+local boltPeak, boltAge = 0, 0;
+
+bolt:SetScript("OnUpdate", function(self, elapsed)
+    boltAge = boltAge + elapsed;
+    if boltAge >= BOLT_TIME then
+        self:Hide();
+        return;
+    end
+    -- flash, a dip, a second flash, then fading out
+    local alpha;
+    if boltAge < 0.06 then
+        alpha = 1;
+    elseif boltAge < 0.12 then
+        alpha = 0.25;
+    else
+        alpha = 0.8 * (1 - (boltAge - 0.12) / (BOLT_TIME - 0.12)) ^ 2;
+    end
+    boltTexture:SetAlpha(boltPeak * alpha);
+end);
+
+local boltEvents = CreateFrame("Frame");
+boltEvents:RegisterEvent("CHAT_MSG_ADDON");
+boltEvents:SetScript("OnEvent", function(self, event, prefix, message, channel)
+    if prefix ~= BOLT_PREFIX or channel ~= "WHISPER" then
+        return;
+    end
+    local peak = BOLT_PEAK[message];
+    if not peak then
+        return;
+    end
+    boltPeak, boltAge = peak, 0;
+    boltTexture:SetAlpha(peak);
+    bolt:Show();
+    if message == "struck" then
+        UIErrorsFrame:AddMessage("Struck by lightning!", 0.75, 0.88, 1, 1, 3);
+    end
 end);
 
 -- skyCloudLOD stays at 0: at 3 the clouds are smoother but some zones' (Westfall's) turn dark grey. The addon
