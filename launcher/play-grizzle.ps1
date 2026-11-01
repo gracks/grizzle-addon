@@ -4,8 +4,10 @@
 # Play button. The realm decides the branch it downloads (main or test), since the client patch only matches its own
 # server, and the choice is remembered through the realm pinned in WTF/Config.wtf. -Branch test preselects Veilmoor
 # Test (the old play-grizzle-test.cmd passes it).
-# If the update fails (no internet, GitHub down), it says so and you can play with what you have. If the window can't
-# open, it carries on in the console as the launcher did before (-Console forces that).
+# If the update fails (no internet, GitHub down), it says so and you can play with what you have, as long as that's the
+# chosen realm's addon and client patch (otherwise it offers Retry). It downloads only when the realm's branch has a
+# new commit, and not while WoW is running (WoW locks the client patch). If the window can't open, it carries on in
+# the console as the launcher did before (-Console forces that).
 # It updates itself: when the download has a newer play-grizzle.ps1, it replaces this file and runs
 # the new one (-NoSelfUpdate stops that from repeating).
 
@@ -22,6 +24,7 @@ $AddOns = Join-Path $WowDir "Interface\AddOns"
 $Addon  = Join-Path $AddOns "grizzle"
 $Config = Join-Path $WowDir "WTF\Config.wtf"
 $PatchName = "patch-G.MPQ"
+$Installed = Join-Path $WowDir "WTF\grizzle-installed.txt"   # what the addon and client patch came from (Get-Installed)
 $TmpRoot = Join-Path ([IO.Path]::GetTempPath()) ("grizzle-" + [Guid]::NewGuid())
 $Rerun  = $false
 
@@ -34,15 +37,40 @@ if ($Branch -ne "test") { $Branch = "main" }
 
 function Get-Url($B) { "https://github.com/$Repo/archive/refs/heads/$B.zip" }
 
+# What the installed addon and client patch came from: @{ Branch; Sha } (the addon repo's commit, "" if unknown),
+# "partial" if an install broke off, or $null if no launcher recorded it (installed before Oct 31 2026)
+function Get-Installed {
+    if (-not (Test-Path $Installed)) { return $null }
+    $W = @("$(Get-Content -Raw $Installed)".Trim() -split '\s+')
+    if ($W[0] -notin "main", "test") { return "partial" }
+    @{ Branch = $W[0]; Sha = $(if ($W.Count -gt 1) { $W[1] } else { "" }) }
+}
+
+# Whether the installed files can play realm $B: they're its own, or from before the launcher recorded that
+function Test-FilesFor($B) {
+    $I = Get-Installed
+    ($null -eq $I) -or ($I -is [hashtable] -and $I.Branch -eq $B)
+}
+
+# WoW keeps patch-G.MPQ locked while it runs, so an update then would get the addon in but not the patch
+function Test-WowRunning {
+    $Exe = Join-Path $WowDir "Wow.exe"
+    try { [bool](Get-Process -Name Wow -ErrorAction SilentlyContinue | Where-Object { -not $_.Path -or $_.Path -eq $Exe }) }
+    catch { $false }   # can't tell: update as before
+}
+
 # Installs a downloaded addon zip: the addon, the client patch, and the patch notes and banner the window shows (kept in
-# the addon folder; WoW only loads what grizzle.toc lists). Returns $true if the zip's launcher replaced this script.
-function Install-Download($Zip) {
+# the addon folder; WoW only loads what grizzle.toc lists), and records them as branch $B, commit $Sha. Returns $true if
+# the zip's launcher replaced this script.
+function Install-Download($Zip, $B, $Sha) {
     $Out = Join-Path (Split-Path $Zip) "unzipped"
     Expand-Archive -Path $Zip -DestinationPath $Out
     $Src = Get-ChildItem -Path $Out -Directory -Recurse -Filter "grizzle" |
         Where-Object { Test-Path (Join-Path $_.FullName "grizzle.toc") } | Select-Object -First 1
     if (-not $Src) { throw "the download has no addon folder" }
     $Root = $Src.Parent.FullName
+    New-Item -ItemType Directory -Force -Path (Split-Path $Installed) | Out-Null
+    Set-Content -Encoding ASCII -Path $Installed -Value "partial"
     New-Item -ItemType Directory -Force -Path $AddOns | Out-Null
     if (Test-Path $Addon) { Remove-Item -Recurse -Force $Addon }
     Copy-Item -Recurse -Path $Src.FullName -Destination $Addon
@@ -54,6 +82,7 @@ function Install-Download($Zip) {
     # Client patch: WoW loads it on top of its own files. Deleting it puts the client back to stock.
     $Patch = Join-Path $Root "client-patch\$PatchName"
     if (Test-Path $Patch) { Copy-Item -Force -Path $Patch -Destination (Join-Path $WowDir "Data\$PatchName") }
+    Set-Content -Encoding ASCII -Path $Installed -Value "$B $Sha"
     # Launcher: replace this script with the downloaded one if it differs and has no syntax errors.
     $New = Join-Path $Root "launcher\play-grizzle.ps1"
     if (-not $NoSelfUpdate -and (Test-Path $New) -and
@@ -123,7 +152,7 @@ function Invoke-Console {
         New-Item -ItemType Directory -Force -Path $TmpRoot | Out-Null
         $Zip = Join-Path $TmpRoot "addon.zip"
         Invoke-WebRequest -UseBasicParsing -Uri (Get-Url $Branch) -OutFile $Zip
-        $script:Rerun = Install-Download $Zip
+        $script:Rerun = Install-Download $Zip $Branch ""
         Write-Host "The addon and client patch are up to date."
     }
     catch {
@@ -278,56 +307,114 @@ function Show-Banner {
 
 # The realm's address comes from the player's own realmlist (no address in this public script)
 function Start-ServerCheck {
-    if ($script:Check) { $script:Check.Client.Close() }
+    if ($script:Check) { $script:Check.Login.Close(); $script:Check.World.Close() }
     $script:Check = $null
     $Server.Text = ""
     $Host_ = $null
+    $LoginPort = 3724
     $Files = @(Get-ChildItem -Path (Join-Path $WowDir "Data\*\realmlist.wtf") -ErrorAction SilentlyContinue) +
         @(Get-Item -Path (Join-Path $WowDir "Data\realmlist.wtf"), $Config -ErrorAction SilentlyContinue)
     foreach ($F in $Files) {
-        if ((Get-Content -Raw $F.FullName) -match '(?im)^\s*set\s+realmlist\s+"?([^"\s:]+)') { $Host_ = $Matches[1]; break }
+        if ((Get-Content -Raw $F.FullName) -match '(?im)^\s*set\s+realmlist\s+"?([^"\s:]+)(?::(\d+))?') {
+            $Host_ = $Matches[1]
+            if ($Matches[2]) { $LoginPort = [int]$Matches[2] }
+            break
+        }
     }
     if (-not $Host_) { return }
     try {
-        $Client = New-Object Net.Sockets.TcpClient
-        $script:Check = @{ Client = $Client; Task = $Client.ConnectAsync($Host_, $Ports[$Branch]); Start = Get-Date }
+        # The login server too: with only the realm up, nobody gets in
+        $Login = New-Object Net.Sockets.TcpClient
+        $World = New-Object Net.Sockets.TcpClient
+        $script:Check = @{ Login = $Login; World = $World; Start = Get-Date
+            LoginTask = $Login.ConnectAsync($Host_, $LoginPort); WorldTask = $World.ConnectAsync($Host_, $Ports[$Branch]) }
         $Server.ForeColor = $Dim
         $Server.Text = "Checking $($Realms[$Branch])..."
     } catch { }
 }
 
-# The download and the server check run in the background and the timer polls them, so nothing calls back into
-# PowerShell from another thread.
+# The Play button: "busy" (updating, off), "play", or "retry" (the update didn't happen and the installed files can't
+# play this realm, so pressing it updates again)
+function Set-Play($Mode) {
+    $script:PlayMode = $Mode
+    $Play.Text = if ($Mode -eq "retry") { "Retry" } else { "Play" }
+    $Play.Enabled = $Mode -ne "busy"
+    $Busy.Visible = $Mode -eq "busy"
+}
+
+# The update didn't happen. Playing with what's installed is fine if it's this realm's; another realm's addon and
+# client patch would show spells and items wrong here, so then it's Retry instead of Play.
+function Stop-Update($Why) {
+    if (Test-FilesFor $Branch) {
+        $Status.Text = "$Why You can still play with what you have."
+        Set-Play "play"
+    }
+    else {
+        $Status.Text = "$Why $($Realms[$Branch]) needs its own files, so press Retry or pick the other realm."
+        Set-Play "retry"
+    }
+}
+
+function Stop-ForWow {
+    $Status.Text = "WoW is still running. Close it, then press Retry to update."
+    Set-Play "retry"
+}
+
+# Updating: first ask GitHub's API for the branch's latest commit (as plain text); when the installed files came from
+# it, there's nothing to download. Otherwise download that commit's zip (Complete-Check). The requests and the server
+# check run in the background and the timer polls them, so nothing calls back into PowerShell from another thread.
 function Start-Update {
     if ($script:Download) { $script:Download.Web.CancelAsync() }   # an update for the other realm
-    $Play.Enabled = $false
-    $Busy.Visible = $true
-    $Status.Text = "Updating for $($Realms[$Branch])..."
+    Set-Play "busy"
+    $Status.Text = "Checking for updates to $($Realms[$Branch])..."
+    $Web = New-Object Net.WebClient
+    $Web.Headers["User-Agent"] = "play-grizzle"   # GitHub's API refuses requests without one
+    $Web.Headers["Accept"] = "application/vnd.github.sha"
+    $script:Download = @{ Web = $Web; Branch = $Branch; Stage = "check"; Start = Get-Date
+        Task = $Web.DownloadStringTaskAsync([Uri]"https://api.github.com/repos/$Repo/commits/$Branch") }
+}
+
+function Complete-Check {
+    $D = $script:Download
+    $script:Download = $null
+    $Sha = ""
+    if ($D.Task.Status -eq "RanToCompletion" -and $D.Task.Result.Trim() -match '^[0-9a-f]{40}$') { $Sha = $Matches[0] }
+    $I = Get-Installed
+    if ($Sha -and $I -is [hashtable] -and $I.Branch -eq $D.Branch -and $I.Sha -eq $Sha) {
+        $Status.Text = "Up to date."
+        Set-Play "play"
+        return
+    }
+    if (Test-WowRunning) { Stop-ForWow; return }
+    # No commit (no answer, or the API's limit of 60 requests an hour per address): the branch's newest zip
+    $Url = if ($Sha) { "https://github.com/$Repo/archive/$Sha.zip" } else { Get-Url $D.Branch }
+    $Status.Text = "Updating for $($Realms[$D.Branch])..."
     $Dir = Join-Path $TmpRoot ([Guid]::NewGuid())
     New-Item -ItemType Directory -Force -Path $Dir | Out-Null
     $Web = New-Object Net.WebClient
     $Zip = Join-Path $Dir "addon.zip"
-    $script:Download = @{ Web = $Web; Zip = $Zip; Start = Get-Date; Task = $Web.DownloadFileTaskAsync([Uri](Get-Url $Branch), $Zip) }
+    $script:Download = @{ Web = $Web; Branch = $D.Branch; Sha = $Sha; Stage = "zip"; Zip = $Zip; Size = 0; Seen = Get-Date
+        Task = $Web.DownloadFileTaskAsync([Uri]$Url, $Zip) }
 }
 
 function Complete-Update {
     $D = $script:Download
     $script:Download = $null
     try {
-        if ($D.Task.IsCanceled) { throw "GitHub took too long to answer." }
+        if ($D.Task.IsCanceled) { throw "GitHub stopped answering." }
         if ($D.Task.IsFaulted) { throw $D.Task.Exception.InnerException }
-        if (Install-Download $D.Zip) {
+        if (Test-WowRunning) { Stop-ForWow; return }   # started during the download
+        if (Install-Download $D.Zip $D.Branch $D.Sha) {
             $script:Rerun = $true   # the launcher changed: open the new one
             $Form.Close()
             return
         }
         $Status.Text = "Up to date."
+        Set-Play "play"
     }
     catch {
-        $Status.Text = "Couldn't update: $($_.Exception.Message) You can still play with what you have."
+        Stop-Update "Couldn't update: $($_.Exception.Message)"
     }
-    $Busy.Visible = $false
-    $Play.Enabled = $true
     Show-Banner
     Read-Notes
 }
@@ -335,16 +422,34 @@ function Complete-Update {
 function Update-Timers {
     $D = $script:Download
     if ($D) {
-        if ($D.Task.IsCompleted) { Complete-Update }
-        elseif (((Get-Date) - $D.Start).TotalSeconds -gt 30) { $D.Web.CancelAsync() }
+        if ($D.Task.IsCompleted) { if ($D.Stage -eq "check") { Complete-Check } else { Complete-Update } }
+        elseif ($D.Stage -eq "check") {
+            if (((Get-Date) - $D.Start).TotalSeconds -gt 10) { $D.Web.CancelAsync() }   # then it downloads anyway
+        }
+        else {
+            # The zip: give up when nothing has arrived for 30 s (on a slow line the whole zip takes longer than that)
+            $F = Get-Item -Path $D.Zip -ErrorAction SilentlyContinue
+            $Size = if ($F) { $F.Length } else { 0 }
+            if ($Size -gt $D.Size) {
+                $D.Size = $Size
+                $D.Seen = Get-Date
+                $Status.Text = "Updating for $($Realms[$D.Branch])... $([Math]::Round($Size / 1MB, 1)) MB"
+            }
+            elseif (((Get-Date) - $D.Seen).TotalSeconds -gt 30) { $D.Web.CancelAsync() }
+        }
     }
     $C = $script:Check
     if (-not $C) { return }
-    if ($C.Task.IsCompleted -or ((Get-Date) - $C.Start).TotalSeconds -gt 5) {
-        $Up = $C.Task.Status -eq "RanToCompletion"
-        $Server.ForeColor = if ($Up) { $Green } else { $Red }
-        $Server.Text = [string][char]0x25CF + " $($Realms[$Branch]) is " + $(if ($Up) { "up" } else { "down" })
-        $C.Client.Close()
+    if (($C.LoginTask.IsCompleted -and $C.WorldTask.IsCompleted) -or ((Get-Date) - $C.Start).TotalSeconds -gt 5) {
+        $WorldUp = $C.WorldTask.Status -eq "RanToCompletion"
+        $LoginUp = $C.LoginTask.Status -eq "RanToCompletion"
+        $Server.ForeColor = if ($WorldUp -and $LoginUp) { $Green } else { $Red }
+        $Server.Text = [string][char]0x25CF + " " + $(
+            if (-not $WorldUp) { "$($Realms[$Branch]) is down" }
+            elseif (-not $LoginUp) { "The login server is down" }
+            else { "$($Realms[$Branch]) is up" })
+        $C.Login.Close()
+        $C.World.Close()
         $script:Check = $null
     }
 }
@@ -487,9 +592,13 @@ try {
             Start-Update
             Start-ServerCheck
         }
-        catch { $Status.Text = "Couldn't update: $($_.Exception.Message)"; $Play.Enabled = $true; $Busy.Visible = $false }
+        catch { Stop-Update "Couldn't update: $($_.Exception.Message)" }
     })
     $Play.add_Click({
+        if ($PlayMode -eq "retry") {
+            try { Start-Update } catch { Stop-Update "Couldn't update: $($_.Exception.Message)" }
+            return
+        }
         try {
             Set-Realm $Branch
             if (Start-Wow) { $Form.Close() }
@@ -505,7 +614,7 @@ try {
             Read-Notes
             Start-ServerCheck
         }
-        catch { $Status.Text = "Couldn't update: $($_.Exception.Message)"; $Play.Enabled = $true; $Busy.Visible = $false }
+        catch { Stop-Update "Couldn't update: $($_.Exception.Message)" }
         Set-ConsoleShown $false
     })
 }
