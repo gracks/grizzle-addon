@@ -2,6 +2,7 @@
 ## Title: Veilmoor
 ## Notes: Custom tooltip overrides for cold system and campfire
 ## Version: 1.0
+## SavedVariables: GrizzleSfxMuted
 ## SavedVariablesPerCharacter: GrizzleTombstone
 
 grizzle.lua

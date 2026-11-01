@@ -107,8 +107,10 @@ end);
 hooksecurefunc("TargetFrame_CheckLevel", UpdateFrame);
 
 -- --- tooltip: "Level 24 Beast (Elite)" becomes "Beast (Elite)" in the danger color ---------------
+-- "Level ??" (10 or more levels above you, or a boss) becomes the skull in front of the rest.
 
 local LEVEL_PATTERN = "^" .. LEVEL .. " [%d%?]+%s*(.*)$";
+local SKULL = "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:0|t ";
 
 GameTooltip:HookScript("OnTooltipSetUnit", function(self)
     local _, unit = self:GetUnit();
@@ -120,11 +122,14 @@ GameTooltip:HookScript("OnTooltipSetUnit", function(self)
         local text = line and line:GetText();
         local rest = text and text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):match(LEVEL_PATTERN);
         if rest then
+            local level = UnitLevel(unit);
             if UnitCanAttack("player", unit) then
-                local level = UnitLevel(unit);
                 local color = level > 0 and GetQuestDifficultyColor(level) or QuestDifficultyColors["impossible"];
                 rest = string.format("|cff%02x%02x%02x%s|r", math.floor(color.r * 255), math.floor(color.g * 255),
                     math.floor(color.b * 255), rest);
+            end
+            if level <= 0 then
+                rest = SKULL .. rest;
             end
             line:SetText(rest);
             self:Show();

@@ -38,7 +38,8 @@ server).
 ### Hidden creature levels (levels.lua)
 Creatures' level numbers are gone from the target and focus frames, tooltips and nameplates. Their danger color
 stays: a thin ring round the target's portrait, a dot on nameplates, and the tooltip's level line in that color.
-Players and their pets keep their numbers.
+Creatures 10 or more levels above you (or bosses) keep the skull, on the frame, nameplate and tooltip. Players
+and their pets keep their numbers.
 
 ## Installation
 

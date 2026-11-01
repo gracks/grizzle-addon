@@ -150,3 +150,59 @@ events:SetScript("OnEvent", function(self, event, prefix, message, channel)
         UpdateBar();
     end
 end);
+
+-- --- a level lost --------------------------------------------------------------------------------
+-- The client plays its level-up glow and ding on any change of the level, a drop included. Just before a level lost
+-- to death drops (at the ghost's revive), the server sends an addon whisper "GRZ_LVLLOSS": sound effects go off, so
+-- the ding goes unheard, and once the level has dropped this sound plays on the Master channel, which plays with
+-- sound effects off. They come back on 4.5 s later (the ding is over by then), or after 3 s without the drop.
+-- GrizzleSfxMuted (SavedVariables) turns them back on after a /reload in between.
+
+local LEVEL_LOSS_PREFIX = "GRZ_LVLLOSS";
+local LEVEL_LOSS_SOUND = "Interface\\AddOns\\grizzle\\sounds\\levelloss.wav";
+
+GrizzleSfxMuted = GrizzleSfxMuted or nil;
+
+local levelLoss = CreateFrame("Frame");
+local levelBefore, timeLeft;
+
+local function Unmute()
+    levelLoss:SetScript("OnUpdate", nil);
+    levelBefore = nil;
+    if GrizzleSfxMuted then
+        GrizzleSfxMuted = nil;
+        SetCVar("Sound_EnableSFX", 1);
+    end
+end
+
+local function OnUpdate(self, elapsed)
+    if levelBefore and UnitLevel("player") < levelBefore then
+        levelBefore = nil;
+        timeLeft = 4.5;
+        PlaySoundFile(LEVEL_LOSS_SOUND, "Master");
+    end
+    timeLeft = timeLeft - elapsed;
+    if timeLeft <= 0 then
+        Unmute();
+    end
+end
+
+levelLoss:RegisterEvent("CHAT_MSG_ADDON");
+levelLoss:RegisterEvent("PLAYER_LOGIN");
+levelLoss:RegisterEvent("PLAYER_LOGOUT");
+levelLoss:SetScript("OnEvent", function(self, event, prefix, message, channel)
+    if event == "CHAT_MSG_ADDON" then
+        if prefix ~= LEVEL_LOSS_PREFIX or channel ~= "WHISPER" then
+            return;
+        end
+        if GetCVar("Sound_EnableSFX") == "1" then
+            GrizzleSfxMuted = true;
+            SetCVar("Sound_EnableSFX", 0);
+        end
+        levelBefore = UnitLevel("player");
+        timeLeft = 3;
+        self:SetScript("OnUpdate", OnUpdate);
+    else
+        Unmute();
+    end
+end);
