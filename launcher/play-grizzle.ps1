@@ -90,10 +90,12 @@ function Install-Download($Zip, $B, $Sha, $When) {
     if (Test-Path $Addon) { Remove-Item -Recurse -Force $Addon }
     Copy-Item -Recurse -Path $Src.FullName -Destination $Addon
     Remove-Item -Force -Path (Join-Path $WowDir "WTF\grizzle-notes-*.txt") -ErrorAction SilentlyContinue   # the old "new since" copies
-    foreach ($F in "PATCHNOTES.md", "PATCHNOTES.dates", "launcher\banner.jpg", "launcher\banner.png") {
+    foreach ($F in "PATCHNOTES.md", "PATCHNOTES.dates") {
         $P = Join-Path $Root $F
         if (Test-Path $P) { Copy-Item -Force -Path $P -Destination $Addon }
     }
+    Get-ChildItem -Path (Join-Path $Root "launcher") -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^banner.*\.(jpg|png)$' } | Copy-Item -Force -Destination $Addon
     # Client patch: WoW loads it on top of its own files. Deleting it puts the client back to stock.
     $Patch = Join-Path $Root "client-patch\$PatchName"
     if (Test-Path $Patch) { Copy-Item -Force -Path $Patch -Destination (Join-Path $WowDir "Data\$PatchName") }
@@ -309,18 +311,22 @@ function Show-Notes($View = "recent") {
     $Notes.Rtf = $Rtf.ToString()
 }
 
+# The banner's pictures: every banner*.jpg or .png from the addon repo's launcher folder, in name order. With more than
+# one, the banner shows each for 5 seconds (BannerTimer).
 function Show-Banner {
-    foreach ($Name in "banner.jpg", "banner.png") {
-        $P = Join-Path $Addon $Name
-        if (Test-Path $P) {
-            # From bytes, not the file: an image loaded from a file keeps it locked, and the next update replaces it
-            $Old = $script:BannerImage
-            $script:BannerImage = [Drawing.Image]::FromStream((New-Object IO.MemoryStream(, [IO.File]::ReadAllBytes($P))))
-            if ($Old) { $Old.Dispose() }
-            $Banner.Invalidate()
-            return
-        }
+    $Old = $script:BannerImages
+    $New = @()
+    $Files = Get-ChildItem -Path $Addon -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^banner.*\.(jpg|png)$' } | Sort-Object Name
+    foreach ($F in $Files) {
+        # From bytes, not the file: an image loaded from a file keeps it locked, and the next update replaces it
+        try { $New += [Drawing.Image]::FromStream((New-Object IO.MemoryStream(, [IO.File]::ReadAllBytes($F.FullName)))) }
+        catch { }
     }
+    $script:BannerImages = $New
+    $script:BannerIndex = 0
+    foreach ($I in $Old) { $I.Dispose() }
+    $Banner.Invalidate()
 }
 
 # The realm's address comes from the player's own realmlist (no address in this public script)
@@ -594,10 +600,11 @@ try {
     $Form.Controls.Add($Bottom)
     $Form.AcceptButton = $Play
 
-    # Banner: launcher/banner.jpg (or .png) from the addon repo, 40% of the window's height. The image is scaled to cover
+    # Banner: launcher/banner*.jpg (or .png) from the addon repo, in turn (Show-Banner), 40% of the window's height. The image is scaled to cover
     # it and centered, its overflow cut off, so any shape works (a 16:9 screenshot loses some top and bottom). The name in
     # big letters until there is one.
-    $script:BannerImage = $null
+    $script:BannerImages = @()
+    $script:BannerIndex = 0
     $Banner = New-Object Windows.Forms.PictureBox
     $Banner.Dock = "Top"
     $Banner.Height = [int]($Form.ClientSize.Height * 0.4)
@@ -605,8 +612,8 @@ try {
     $Banner.Margin = New-Object Windows.Forms.Padding(0)
     $Banner.add_Paint({
         param($S, $E)
-        $Img = $script:BannerImage
-        if ($Img) {
+        if ($script:BannerImages.Count) {
+            $Img = $script:BannerImages[$script:BannerIndex % $script:BannerImages.Count]
             $W = $Banner.ClientSize.Width
             $H = $Banner.ClientSize.Height
             $Scale = [Math]::Max($W / $Img.Width, $H / $Img.Height)
@@ -628,6 +635,15 @@ try {
             $Banner.Invalidate()
         }
         catch { }
+    })
+
+    $BannerTimer = New-Object Windows.Forms.Timer
+    $BannerTimer.Interval = 5000
+    $BannerTimer.add_Tick({
+        if ($script:BannerImages.Count -gt 1) {
+            $script:BannerIndex = ($script:BannerIndex + 1) % $script:BannerImages.Count
+            $Banner.Invalidate()
+        }
     })
 
     $Timer = New-Object Windows.Forms.Timer
@@ -657,6 +673,7 @@ try {
     })
     $Form.add_Shown({
         $Timer.Start()
+        $BannerTimer.Start()
         try {
             Start-Update
             Show-Banner
