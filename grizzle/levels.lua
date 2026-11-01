@@ -1,34 +1,14 @@
 -- Grizzle hidden levels (doc/grizzle/unknown.md "Not seeing a mob's level"): a creature's level number is gone from
--- the target and focus frames, the unit tooltip and the nameplates. The danger color takes its place: on the target
--- frame in one of several styles (below), a dot on nameplates, the rest of the tooltip's level line. The "??" skull
--- stays. Players and what they control (pets, totems) keep their numbers.
--- /moblevels <n> picks the target frame's style, 0 shows the numbers again (to compare on Test).
-
-GrizzleMobLevelStyle = GrizzleMobLevelStyle or nil;   -- 0: numbers; nil: DEFAULT_STYLE (SavedVariables)
+-- the target and focus frames, the unit tooltip and the nameplates. The danger color takes its place: a thin ring
+-- round the target's portrait, a dot on nameplates, the rest of the tooltip's level line. The "??" skull stays.
+-- Players and what they control (pets, totems) keep their numbers. No switch to show them: players don't get one.
 
 local TEXTURES = "Interface\\AddOns\\grizzle\\textures\\";
 local DOT = TEXTURES .. "level_dot";                  -- apps/grizzle/gen_level_dot.py
-
--- ring: a ring over the portrait's gold one (attackable creatures only), bright: how much of the color it shows.
--- dot: a dot this big where the level circle was; keepCircle: in the stock circle, socket: in a smaller one.
-local STYLES = {
-    { name = "thin ring", ring = "target_ring_thin", bright = 0.85 },
-    { name = "medium ring, dimmer", ring = "target_ring_medium", bright = 0.7 },
-    { name = "small dot in the level circle", dot = 11, keepCircle = true },
-    { name = "dot in a smaller level circle", dot = 13, socket = 22 },
-    { name = "dot on the portrait's ring, no level circle", dot = 13 },
-    { name = "thin ring, darker", ring = "target_ring_thin", bright = 0.65 },
-    { name = "thin ring, darker still", ring = "target_ring_thin", bright = 0.45 },
-};
-local DEFAULT_STYLE = 1;
-
-local function Style()
-    local n = GrizzleMobLevelStyle or DEFAULT_STYLE;
-    return n ~= 0 and STYLES[n] or nil;
-end
+local RING_BRIGHTNESS = 0.85;                         -- how much of the danger color the ring shows
 
 local function Hiding(unit)
-    return Style() and unit and not UnitIsPlayer(unit) and not UnitPlayerControlled(unit);
+    return unit and not UnitIsPlayer(unit) and not UnitPlayerControlled(unit);
 end
 
 local function MakeDot(parent, anchor, size)
@@ -40,17 +20,17 @@ local function MakeDot(parent, anchor, size)
     return dot;
 end
 
--- --- target and focus frames ----------------------------------------------------------------------
+-- --- target and focus frames: the portrait's ring in the danger color ----------------------------
 
--- The level circle is painted into the frame art, so styles without it use copies that leave it out
--- (apps/grizzle/gen_target_frames.py). Keyed by the art Blizzard picked (normal, elite, rare, rare elite).
+-- The level circle is painted into the frame art, so creatures get copies that leave it out, and a thin ring over the
+-- portrait's gold one, tinted for creatures you can attack (apps/grizzle/gen_target_frames.py). The "??" skull sits
+-- on the ring where the circle was. Keyed by the art Blizzard picked (normal, elite, rare, rare elite).
 local FRAME_ART = {
     ["interface\\targetingframe\\ui-targetingframe"] = TEXTURES .. "target_frame",
     ["interface\\targetingframe\\ui-targetingframe-elite"] = TEXTURES .. "target_frame_elite",
     ["interface\\targetingframe\\ui-targetingframe-rare"] = TEXTURES .. "target_frame_rare",
     ["interface\\targetingframe\\ui-targetingframe-rare-elite"] = TEXTURES .. "target_frame_rare_elite",
 };
-local FRIENDLY = { r = 1, g = 0.82, b = 0 };           -- Blizzard's color for levels of units you can't attack
 
 local function MakeParts(self)
     local border = self.borderTexture;
@@ -59,26 +39,22 @@ local function MakeParts(self)
     frame:SetAllPoints(border:GetParent());
     frame:SetFrameLevel(border:GetParent():GetFrameLevel() + 1);
     local parts = {
-        ring = frame:CreateTexture(nil, "BACKGROUND"),
-        socket = frame:CreateTexture(nil, "ARTWORK"),
+        ring = frame:CreateTexture(nil, "ARTWORK"),
         dot = frame:CreateTexture(nil, "OVERLAY"),
         skull = frame:CreateTexture(nil, "OVERLAY"),
     };
+    parts.ring:SetTexture(TEXTURES .. "target_ring");
     parts.ring:SetAllPoints(border);
-    parts.socket:SetTexture(TEXTURES .. "level_socket");
     parts.dot:SetTexture(DOT);
+    parts.dot:SetSize(12, 12);
+    -- Blizzard centers the number in the level circle, shown or not. (Working the spot out from the art's texture
+    -- coordinates landed about 20 px low and right in game.)
+    parts.dot:SetPoint("CENTER", self.levelText, "CENTER", 0, 0);
     parts.skull:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull");
+    parts.skull:SetSize(16, 16);
+    parts.skull:SetPoint("CENTER", self.levelText, "CENTER", 0, 0);
     self.grizzleParts = parts;
     return parts;
-end
-
--- puts a part where the level circle's center is: Blizzard centers the number there, shown or not. (Working it out
--- from the art's texture coordinates landed about 20 px low and right in game.)
-local function AtCircle(self, part, size)
-    part:ClearAllPoints();
-    part:SetPoint("CENTER", self.levelText, "CENTER", 0, 0);
-    part:SetSize(size, size);
-    part:Show();
 end
 
 -- runs after Blizzard has set the art, the number and its color, or the skull
@@ -93,7 +69,7 @@ local function UpdateFrame(self)
     end
     local stock = self.grizzleStockArt;
     local art = stock and FRAME_ART[stock:lower():gsub("%.blp$", "")];
-    local unit, style = self.unit, Style();
+    local unit = self.unit;
     if not Hiding(unit) or UnitIsCorpse(unit) then
         if art then
             border:SetTexture(stock);
@@ -103,44 +79,24 @@ local function UpdateFrame(self)
     if not art then
         -- other art (boss frames): a dot where the number was
         if text:IsShown() then
-            parts.dot:ClearAllPoints();
-            parts.dot:SetPoint("CENTER", text, "CENTER", 0, 0);
-            parts.dot:SetSize(12, 12);
             parts.dot:SetVertexColor(text:GetTextColor());
             parts.dot:Show();
             text:Hide();
         end
         return;
     end
-    local level = UnitLevel(unit);
-    local attackable = UnitCanAttack("player", unit);
-    local color = level <= 0 and QuestDifficultyColors["impossible"]
-        or attackable and GetQuestDifficultyColor(level) or FRIENDLY;
-    border:SetTexture(style.keepCircle and stock or art);
+    border:SetTexture(art);
     text:Hide();
-    if level <= 0 and not style.keepCircle then
-        self.highLevelTexture:Hide();          -- the skull goes on the ring or in the socket instead
+    local level = UnitLevel(unit);
+    if level <= 0 then
+        self.highLevelTexture:Hide();          -- the skull goes on the ring instead
+        parts.skull:Show();
     end
-    if style.ring then
-        if attackable then
-            parts.ring:SetTexture(TEXTURES .. style.ring);
-            parts.ring:SetTexCoord(border:GetTexCoord());
-            parts.ring:SetVertexColor(color.r * style.bright, color.g * style.bright, color.b * style.bright);
-            parts.ring:Show();
-        end
-        if level <= 0 then
-            AtCircle(self, parts.skull, 16);
-        end
-        return;
-    end
-    if style.socket then
-        AtCircle(self, parts.socket, style.socket);
-    end
-    if level > 0 then
-        AtCircle(self, parts.dot, style.dot);
-        parts.dot:SetVertexColor(color.r, color.g, color.b);
-    elseif not style.keepCircle then
-        AtCircle(self, parts.skull, style.socket and 12 or 14);
+    if UnitCanAttack("player", unit) then
+        local color = level > 0 and GetQuestDifficultyColor(level) or QuestDifficultyColors["impossible"];
+        parts.ring:SetTexCoord(border:GetTexCoord());
+        parts.ring:SetVertexColor(color.r * RING_BRIGHTNESS, color.g * RING_BRIGHTNESS, color.b * RING_BRIGHTNESS);
+        parts.ring:Show();
     end
 end
 
@@ -204,13 +160,12 @@ local function AddPlate(frame)
 end
 
 local function UpdatePlate(plate)
-    if Style() and plate.level:IsShown() then
+    plate.level:SetAlpha(0);
+    if plate.level:IsShown() then
         plate.dot:SetVertexColor(plate.level:GetTextColor());
         plate.dot:Show();
-        plate.level:SetAlpha(0);
     else
         plate.dot:Hide();
-        plate.level:SetAlpha(1);
     end
 end
 
@@ -237,30 +192,3 @@ plateWatcher:SetScript("OnUpdate", function(self, elapsed)
         end
     end
 end);
-
--- --- /moblevels -------------------------------------------------------------------------------
-
-local function Say(text)
-    DEFAULT_CHAT_FRAME:AddMessage("|cffffd200Veilmoor:|r " .. text);
-end
-
-SLASH_GRIZZLEMOBLEVELS1 = "/moblevels";
-SlashCmdList["GRIZZLEMOBLEVELS"] = function(message)
-    local n = tonumber(message);
-    if not n or (n ~= 0 and not STYLES[n]) then
-        Say("/moblevels <n> picks how creatures' levels show on the target frame (now "
-            .. (GrizzleMobLevelStyle or DEFAULT_STYLE) .. "):");
-        Say("0: numbers");
-        for i, style in ipairs(STYLES) do
-            Say(i .. ": " .. style.name .. (i == DEFAULT_STYLE and " (default)" or ""));
-        end
-        return;
-    end
-    GrizzleMobLevelStyle = n;
-    for _, frame in ipairs({ TargetFrame, FocusFrame }) do
-        if frame and frame:IsShown() then
-            TargetFrame_CheckLevel(frame);
-        end
-    end
-    Say("creature levels: " .. (n == 0 and "numbers" or STYLES[n].name) .. ".");
-end;
