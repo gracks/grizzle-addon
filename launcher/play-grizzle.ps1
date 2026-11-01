@@ -662,10 +662,10 @@ try {
             $DH = [int][Math]::Ceiling($Img.Height * $Scale)
             $E.Graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
             $E.Graphics.DrawImage($Img, [int](($W - $DW) / 2), [int](($H - $DH) / 2), $DW, $DH)
-            # The name, top left (where the pictures are sky or fog), 30% of the banner's height
+            # The name, top left (where the pictures are sky or fog), 24% of the banner's height
             $T = $script:TitleImage
             if ($T) {
-                $TH = [int]($H * 0.3)
+                $TH = [int]($H * 0.24)
                 $TW = [int]($T.Width * $TH / $T.Height)
                 $E.Graphics.DrawImage($T, [int]($H * 0.06), [int]($H * 0.04), $TW, $TH)
             }
