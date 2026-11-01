@@ -2,6 +2,7 @@
 ## Title: Veilmoor
 ## Notes: Custom tooltip overrides for cold system and campfire
 ## Version: 1.0
+## SavedVariables: GrizzleShowMobLevels
 ## SavedVariablesPerCharacter: GrizzleTombstone
 
 grizzle.lua
@@ -10,5 +11,6 @@ death.lua
 wanted.lua
 weather.lua
 food.lua
+levels.lua
 launcher.lua
 realm.lua

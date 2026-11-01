@@ -37,13 +37,28 @@ if ($Branch -ne "test") { $Branch = "main" }
 
 function Get-Url($B) { "https://github.com/$Repo/archive/refs/heads/$B.zip" }
 
-# What the installed addon and client patch came from: @{ Branch; Sha } (the addon repo's commit, "" if unknown),
-# "partial" if an install broke off, or $null if no launcher recorded it (installed before Oct 31 2026)
+# What the installed addon and client patch came from: @{ Branch; Sha; When } (the addon repo's commit and when it was
+# published, ISO time; "" if unknown), "partial" if an install broke off, or $null if no launcher recorded it (installed
+# before Oct 31 2026)
 function Get-Installed {
     if (-not (Test-Path $Installed)) { return $null }
     $W = @("$(Get-Content -Raw $Installed)".Trim() -split '\s+')
     if ($W[0] -notin "main", "test") { return "partial" }
-    @{ Branch = $W[0]; Sha = $(if ($W.Count -gt 1) { $W[1] } else { "" }) }
+    @{ Branch = $W[0]; Sha = $(if ($W.Count -gt 1) { $W[1] } else { "" }); When = $(if ($W.Count -gt 2) { $W[2] } else { "" }) }
+}
+
+# When the installed files were published, in local time ("Oct 31, 8:41 PM"), or "" if unknown
+function Get-FilesDate {
+    $I = Get-Installed
+    if (-not ($I -is [hashtable] -and $I.When)) { return "" }
+    try { ([DateTimeOffset]::Parse($I.When, [Globalization.CultureInfo]::InvariantCulture)).LocalDateTime.ToString("MMM d, h:mm tt") }
+    catch { "" }
+}
+
+# "Up to date: Oct 31, 8:41 PM", so a player can tell which files they have
+function Get-UpToDate {
+    $D = Get-FilesDate
+    "Up to date" + $(if ($D) { ": $D" } else { "" }) + "."
 }
 
 # Whether the installed files can play realm $B: they're its own, or from before the launcher recorded that
@@ -60,9 +75,9 @@ function Test-WowRunning {
 }
 
 # Installs a downloaded addon zip: the addon, the client patch, and the patch notes and banner the window shows (kept in
-# the addon folder; WoW only loads what grizzle.toc lists), and records them as branch $B, commit $Sha. Returns $true if
-# the zip's launcher replaced this script.
-function Install-Download($Zip, $B, $Sha) {
+# the addon folder; WoW only loads what grizzle.toc lists), and records them as branch $B, commit $Sha published at
+# $When. Returns $true if the zip's launcher replaced this script.
+function Install-Download($Zip, $B, $Sha, $When) {
     $Out = Join-Path (Split-Path $Zip) "unzipped"
     Expand-Archive -Path $Zip -DestinationPath $Out
     $Src = Get-ChildItem -Path $Out -Directory -Recurse -Filter "grizzle" |
@@ -82,7 +97,7 @@ function Install-Download($Zip, $B, $Sha) {
     # Client patch: WoW loads it on top of its own files. Deleting it puts the client back to stock.
     $Patch = Join-Path $Root "client-patch\$PatchName"
     if (Test-Path $Patch) { Copy-Item -Force -Path $Patch -Destination (Join-Path $WowDir "Data\$PatchName") }
-    Set-Content -Encoding ASCII -Path $Installed -Value "$B $Sha"
+    Set-Content -Encoding ASCII -Path $Installed -Value "$B $Sha $When"
     # Launcher: replace this script with the downloaded one if it differs and has no syntax errors.
     $New = Join-Path $Root "launcher\play-grizzle.ps1"
     if (-not $NoSelfUpdate -and (Test-Path $New) -and
@@ -152,7 +167,7 @@ function Invoke-Console {
         New-Item -ItemType Directory -Force -Path $TmpRoot | Out-Null
         $Zip = Join-Path $TmpRoot "addon.zip"
         Invoke-WebRequest -UseBasicParsing -Uri (Get-Url $Branch) -OutFile $Zip
-        $script:Rerun = Install-Download $Zip $Branch ""
+        $script:Rerun = Install-Download $Zip $Branch "" ""
         Write-Host "The addon and client patch are up to date."
     }
     catch {
@@ -346,7 +361,8 @@ function Set-Play($Mode) {
 # client patch would show spells and items wrong here, so then it's Retry instead of Play.
 function Stop-Update($Why) {
     if (Test-FilesFor $Branch) {
-        $Status.Text = "$Why You can still play with what you have."
+        $D = Get-FilesDate
+        $Status.Text = "$Why You can still play with what you have" + $(if ($D) { " (from $D)" } else { "" }) + "."
         Set-Play "play"
     }
     else {
@@ -360,8 +376,8 @@ function Stop-ForWow {
     Set-Play "retry"
 }
 
-# Updating: first ask GitHub's API for the branch's latest commit (as plain text); when the installed files came from
-# it, there's nothing to download. Otherwise download that commit's zip (Complete-Check). The requests and the server
+# Updating: first ask GitHub's API for the branch's latest commit and when it was published; when the installed files
+# came from it, there's nothing to download. Otherwise download that commit's zip (Complete-Check). The requests and the server
 # check run in the background and the timer polls them, so nothing calls back into PowerShell from another thread.
 function Start-Update {
     if ($script:Download) { $script:Download.Web.CancelAsync() }   # an update for the other realm
@@ -369,7 +385,7 @@ function Start-Update {
     $Status.Text = "Checking for updates to $($Realms[$Branch])..."
     $Web = New-Object Net.WebClient
     $Web.Headers["User-Agent"] = "play-grizzle"   # GitHub's API refuses requests without one
-    $Web.Headers["Accept"] = "application/vnd.github.sha"
+    $Web.Headers["Accept"] = "application/vnd.github+json"
     $script:Download = @{ Web = $Web; Branch = $Branch; Stage = "check"; Start = Get-Date
         Task = $Web.DownloadStringTaskAsync([Uri]"https://api.github.com/repos/$Repo/commits/$Branch") }
 }
@@ -378,10 +394,21 @@ function Complete-Check {
     $D = $script:Download
     $script:Download = $null
     $Sha = ""
-    if ($D.Task.Status -eq "RanToCompletion" -and $D.Task.Result.Trim() -match '^[0-9a-f]{40}$') { $Sha = $Matches[0] }
+    $When = ""
+    if ($D.Task.Status -eq "RanToCompletion") {
+        try {
+            $J = $D.Task.Result | ConvertFrom-Json
+            if ("$($J.sha)" -match '^[0-9a-f]{40}$') {
+                $Sha = $Matches[0]
+                $When = $J.commit.committer.date   # a string in PowerShell 5, a DateTime in 7
+                if ($When -is [datetime]) { $When = $When.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ") }
+                $When = "$When" -replace '\s', ''
+            }
+        } catch { }
+    }
     $I = Get-Installed
     if ($Sha -and $I -is [hashtable] -and $I.Branch -eq $D.Branch -and $I.Sha -eq $Sha) {
-        $Status.Text = "Up to date."
+        $Status.Text = Get-UpToDate
         Set-Play "play"
         return
     }
@@ -393,7 +420,7 @@ function Complete-Check {
     New-Item -ItemType Directory -Force -Path $Dir | Out-Null
     $Web = New-Object Net.WebClient
     $Zip = Join-Path $Dir "addon.zip"
-    $script:Download = @{ Web = $Web; Branch = $D.Branch; Sha = $Sha; Stage = "zip"; Zip = $Zip; Size = 0; Seen = Get-Date
+    $script:Download = @{ Web = $Web; Branch = $D.Branch; Sha = $Sha; When = $When; Stage = "zip"; Zip = $Zip; Size = 0; Seen = Get-Date
         Task = $Web.DownloadFileTaskAsync([Uri]$Url, $Zip) }
 }
 
@@ -404,12 +431,12 @@ function Complete-Update {
         if ($D.Task.IsCanceled) { throw "GitHub stopped answering." }
         if ($D.Task.IsFaulted) { throw $D.Task.Exception.InnerException }
         if (Test-WowRunning) { Stop-ForWow; return }   # started during the download
-        if (Install-Download $D.Zip $D.Branch $D.Sha) {
+        if (Install-Download $D.Zip $D.Branch $D.Sha $D.When) {
             $script:Rerun = $true   # the launcher changed: open the new one
             $Form.Close()
             return
         }
-        $Status.Text = "Up to date."
+        $Status.Text = Get-UpToDate
         Set-Play "play"
     }
     catch {

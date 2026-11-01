@@ -35,6 +35,11 @@ top of the screen shows which way you face, and a faint glow on it points toward
 your Twinned Bindstone (GRZ_BIND from the server). The Dungeon Finder button is hidden (it's off on the
 server).
 
+### Hidden creature levels (levels.lua)
+Creatures' level numbers are gone from the target and focus frames, tooltips and nameplates. Their danger color
+stays: a colored dot where the number was, and the tooltip's level line in that color. Players and their pets
+keep their numbers. Type `/moblevels` to show the numbers again (and again to hide them).
+
 ## Installation
 
 1. Copy the `grizzle` folder (containing `grizzle.toc` and `grizzle.lua`) to your World of Warcraft `Interface/AddOns/` directory.
