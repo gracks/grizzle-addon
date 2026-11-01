@@ -95,7 +95,7 @@ function Install-Download($Zip, $B, $Sha, $When) {
         if (Test-Path $P) { Copy-Item -Force -Path $P -Destination $Addon }
     }
     Get-ChildItem -Path (Join-Path $Root "launcher") -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^banner.*\.(jpg|png)$' } | Copy-Item -Force -Destination $Addon
+        Where-Object { $_.Name -match '^(banner.*\.(jpg|png)|title\.png)$' } | Copy-Item -Force -Destination $Addon
     # Client patch: WoW loads it on top of its own files. Deleting it puts the client back to stock.
     $Patch = Join-Path $Root "client-patch\$PatchName"
     if (Test-Path $Patch) { Copy-Item -Force -Path $Patch -Destination (Join-Path $WowDir "Data\$PatchName") }
@@ -311,22 +311,62 @@ function Show-Notes($View = "recent") {
     $Notes.Rtf = $Rtf.ToString()
 }
 
+# From bytes, not the file: an image loaded from a file keeps it locked, and the next update replaces it
+function Read-Image($P) {
+    try { [Drawing.Image]::FromStream((New-Object IO.MemoryStream(, [IO.File]::ReadAllBytes($P)))) } catch { $null }
+}
+
 # The banner's pictures: every banner*.jpg or .png from the addon repo's launcher folder, in name order. With more than
-# one, the banner shows each for 5 seconds (BannerTimer).
+# one, the banner shows each for 5 seconds (BannerTimer). title.png, the realm's name, goes on top of them.
 function Show-Banner {
-    $Old = $script:BannerImages
+    $Old = @($script:BannerImages) + @($script:TitleImage)
     $New = @()
     $Files = Get-ChildItem -Path $Addon -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match '^banner.*\.(jpg|png)$' } | Sort-Object Name
     foreach ($F in $Files) {
-        # From bytes, not the file: an image loaded from a file keeps it locked, and the next update replaces it
-        try { $New += [Drawing.Image]::FromStream((New-Object IO.MemoryStream(, [IO.File]::ReadAllBytes($F.FullName)))) }
-        catch { }
+        $I = Read-Image $F.FullName
+        if ($I) { $New += $I }
     }
     $script:BannerImages = $New
     $script:BannerIndex = 0
-    foreach ($I in $Old) { $I.Dispose() }
+    $T = Join-Path $Addon "title.png"
+    $script:TitleImage = if (Test-Path $T) { Read-Image $T } else { $null }
+    foreach ($I in $Old) { if ($I) { $I.Dispose() } }
     $Banner.Invalidate()
+}
+
+# Where the banner's controls are, for $N pictures in a $W x $H banner: a dot per picture along the bottom (Dots, with
+# a bigger click area in Hits), and the previous/next arrows at the edges
+function Get-BannerParts($W, $H, $N) {
+    $Size = 10
+    $Gap = 10
+    $X = [int](($W - ($N * $Size + ($N - 1) * $Gap)) / 2)
+    $Y = $H - $Size - 14
+    $Dots = @()
+    $Hits = @()
+    for ($I = 0; $I -lt $N; $I++) {
+        $R = New-Object Drawing.Rectangle(($X + $I * ($Size + $Gap)), $Y, $Size, $Size)
+        $Dots += $R
+        $Hits += New-Object Drawing.Rectangle(($R.X - 5), ($R.Y - 8), ($Size + 10), ($Size + 16))
+    }
+    $A = 40
+    @{
+        Dots = $Dots
+        Hits = $Hits
+        Prev = New-Object Drawing.Rectangle(12, [int](($H - $A) / 2), $A, $A)
+        Next = New-Object Drawing.Rectangle(($W - $A - 12), [int](($H - $A) / 2), $A, $A)
+    }
+}
+
+# Which banner control is at point $P: "prev", "next", a picture's index, or $null
+function Get-BannerHit($P) {
+    $N = $script:BannerImages.Count
+    if ($N -lt 2) { return $null }
+    $Parts = Get-BannerParts $Banner.ClientSize.Width $Banner.ClientSize.Height $N
+    if ($Parts.Prev.Contains($P)) { return "prev" }
+    if ($Parts.Next.Contains($P)) { return "next" }
+    for ($I = 0; $I -lt $N; $I++) { if ($Parts.Hits[$I].Contains($P)) { return $I } }
+    $null
 }
 
 # The realm's address comes from the player's own realmlist (no address in this public script)
@@ -605,6 +645,7 @@ try {
     # big letters until there is one.
     $script:BannerImages = @()
     $script:BannerIndex = 0
+    $script:TitleImage = $null
     $Banner = New-Object Windows.Forms.PictureBox
     $Banner.Dock = "Top"
     $Banner.Height = [int]($Form.ClientSize.Height * 0.4)
@@ -621,12 +662,77 @@ try {
             $DH = [int][Math]::Ceiling($Img.Height * $Scale)
             $E.Graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
             $E.Graphics.DrawImage($Img, [int](($W - $DW) / 2), [int](($H - $DH) / 2), $DW, $DH)
+            # The name, top left (where the pictures are sky or fog), 30% of the banner's height
+            $T = $script:TitleImage
+            if ($T) {
+                $TH = [int]($H * 0.3)
+                $TW = [int]($T.Width * $TH / $T.Height)
+                $E.Graphics.DrawImage($T, [int]($H * 0.06), [int]($H * 0.04), $TW, $TH)
+            }
+            # With more than one picture: dots showing how many and which, and arrows while the mouse is over the banner
+            $N = $script:BannerImages.Count
+            if ($N -gt 1) {
+                $G = $E.Graphics
+                $G.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+                $Parts = Get-BannerParts $W $H $N
+                $Shade = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(120, 0, 0, 0))
+                $On = New-Object Drawing.SolidBrush($Ink)
+                $Off = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(110, $Ink))
+                for ($I = 0; $I -lt $N; $I++) {
+                    $R = $Parts.Dots[$I]
+                    $G.FillEllipse($Shade, ($R.X - 2), ($R.Y - 2), ($R.Width + 4), ($R.Height + 4))
+                    $G.FillEllipse($(if ($I -eq $script:BannerIndex % $N) { $On } else { $Off }), $R)
+                }
+                if ($script:BannerHover) {
+                    $Pen = New-Object Drawing.Pen($Ink, 3)
+                    foreach ($Side in "Prev", "Next") {
+                        $R = $Parts[$Side]
+                        $G.FillEllipse($Shade, $R)
+                        $CX = $R.X + $R.Width / 2
+                        $CY = $R.Y + $R.Height / 2
+                        $D = if ($Side -eq "Prev") { 3 } else { -3 }   # the chevron's point, toward its side
+                        $G.DrawLines($Pen, [Drawing.PointF[]]@(
+                            (New-Object Drawing.PointF(($CX + $D + 0.0), ($CY - 8.0))),
+                            (New-Object Drawing.PointF(($CX - $D - 0.0), $CY)),
+                            (New-Object Drawing.PointF(($CX + $D + 0.0), ($CY + 8.0)))))
+                    }
+                    $Pen.Dispose()
+                }
+                $Shade.Dispose(); $On.Dispose(); $Off.Dispose()
+            }
             return
         }
         $Flags = [Windows.Forms.TextFormatFlags]"HorizontalCenter, VerticalCenter"
         $Big = New-Object Drawing.Font("Georgia", 44, [Drawing.FontStyle]::Bold)
         [Windows.Forms.TextRenderer]::DrawText($E.Graphics, "VEILMOOR", $Big, $Banner.ClientRectangle, $Gold, $Flags)
         $Big.Dispose()
+    })
+    # Clicking a dot or an arrow picks the picture and starts its 5 seconds over
+    $script:BannerHover = $false
+    $Banner.add_MouseEnter({ $script:BannerHover = $true; $Banner.Invalidate() })
+    $Banner.add_MouseLeave({ $script:BannerHover = $false; $Banner.Invalidate() })
+    $Banner.add_MouseMove({
+        param($S, $E)
+        try {
+            $Banner.Cursor = if ($null -ne (Get-BannerHit $E.Location)) { [Windows.Forms.Cursors]::Hand }
+                             else { [Windows.Forms.Cursors]::Default }
+        }
+        catch { }
+    })
+    $Banner.add_MouseClick({
+        param($S, $E)
+        try {
+            $Hit = Get-BannerHit $E.Location
+            if ($null -eq $Hit) { return }
+            $N = $script:BannerImages.Count
+            if ($Hit -is [int]) { $script:BannerIndex = $Hit }
+            elseif ($Hit -eq "prev") { $script:BannerIndex = ($script:BannerIndex + $N - 1) % $N }
+            else { $script:BannerIndex = ($script:BannerIndex + 1) % $N }
+            $BannerTimer.Stop()
+            $BannerTimer.Start()
+            $Banner.Invalidate()
+        }
+        catch { }
     })
     $Form.Controls.Add($Banner)
     $Form.add_Resize({
