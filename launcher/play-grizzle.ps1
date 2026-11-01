@@ -317,7 +317,8 @@ function Read-Image($P) {
 }
 
 # The banner's pictures: every banner*.jpg or .png from the addon repo's launcher folder, in name order. With more than
-# one, the banner shows each for 5 seconds (BannerTimer). title.png, the realm's name, goes on top of them.
+# one, the banner shows each for 10 seconds (BannerTimer), fading from one to the next (Set-BannerIndex). title.png, the
+# realm's name, goes on top of them.
 function Show-Banner {
     $Old = @($script:BannerImages) + @($script:TitleImage)
     $New = @()
@@ -329,10 +330,38 @@ function Show-Banner {
     }
     $script:BannerImages = $New
     $script:BannerIndex = 0
+    $script:BannerFrom = -1
     $T = Join-Path $Addon "title.png"
     $script:TitleImage = if (Test-Path $T) { Read-Image $T } else { $null }
     foreach ($I in $Old) { if ($I) { $I.Dispose() } }
     $Banner.Invalidate()
+}
+
+# Shows picture $I, fading in over the one before it for a second (FadeTimer repaints until it's done)
+function Set-BannerIndex($I) {
+    $script:BannerFrom = $script:BannerIndex
+    $script:BannerIndex = $I
+    $script:FadeClock = [Diagnostics.Stopwatch]::StartNew()
+    $FadeTimer.Start()
+    $Banner.Invalidate()
+}
+
+# Draws $Img over a $W x $H area, scaled to cover it and centered, at opacity $A (0 to 1)
+function Draw-Cover($G, $Img, $W, $H, $A) {
+    $Scale = [Math]::Max($W / $Img.Width, $H / $Img.Height)
+    $DW = [int][Math]::Ceiling($Img.Width * $Scale)
+    $DH = [int][Math]::Ceiling($Img.Height * $Scale)
+    $Rect = New-Object Drawing.Rectangle([int](($W - $DW) / 2), [int](($H - $DH) / 2), $DW, $DH)
+    if ($A -ge 1) {
+        $G.DrawImage($Img, $Rect)
+        return
+    }
+    $Matrix = New-Object Drawing.Imaging.ColorMatrix
+    $Matrix.Matrix33 = [single]$A
+    $Attr = New-Object Drawing.Imaging.ImageAttributes
+    $Attr.SetColorMatrix($Matrix)
+    $G.DrawImage($Img, $Rect, 0, 0, $Img.Width, $Img.Height, [Drawing.GraphicsUnit]::Pixel, $Attr)
+    $Attr.Dispose()
 }
 
 # Where the banner's controls are, for $N pictures in a $W x $H banner: a dot per picture along the bottom (Dots, with
@@ -645,6 +674,8 @@ try {
     # big letters until there is one.
     $script:BannerImages = @()
     $script:BannerIndex = 0
+    $script:BannerFrom = -1
+    $script:FadeClock = $null
     $script:TitleImage = $null
     $Banner = New-Object Windows.Forms.PictureBox
     $Banner.Dock = "Top"
@@ -654,14 +685,21 @@ try {
     $Banner.add_Paint({
         param($S, $E)
         if ($script:BannerImages.Count) {
-            $Img = $script:BannerImages[$script:BannerIndex % $script:BannerImages.Count]
+            $Count = $script:BannerImages.Count
             $W = $Banner.ClientSize.Width
             $H = $Banner.ClientSize.Height
-            $Scale = [Math]::Max($W / $Img.Width, $H / $Img.Height)
-            $DW = [int][Math]::Ceiling($Img.Width * $Scale)
-            $DH = [int][Math]::Ceiling($Img.Height * $Scale)
             $E.Graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-            $E.Graphics.DrawImage($Img, [int](($W - $DW) / 2), [int](($H - $DH) / 2), $DW, $DH)
+            # During a fade: the picture before, with the new one over it, more opaque as the second goes by
+            $A = 1
+            if ($script:FadeClock -and $script:BannerFrom -ge 0) {
+                $A = [Math]::Min(1, $script:FadeClock.ElapsedMilliseconds / 1000)
+            }
+            if ($A -lt 1) {
+                # Cheaper scaling while it moves (the pictures are only shrunk a little, so it looks the same)
+                $E.Graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::Bilinear
+                Draw-Cover $E.Graphics $script:BannerImages[$script:BannerFrom % $Count] $W $H 1
+            }
+            Draw-Cover $E.Graphics $script:BannerImages[$script:BannerIndex % $Count] $W $H $A
             # The name, top left (where the pictures are sky or fog), 24% of the banner's height
             $T = $script:TitleImage
             if ($T) {
@@ -707,7 +745,7 @@ try {
         [Windows.Forms.TextRenderer]::DrawText($E.Graphics, "VEILMOOR", $Big, $Banner.ClientRectangle, $Gold, $Flags)
         $Big.Dispose()
     })
-    # Clicking a dot or an arrow picks the picture and starts its 5 seconds over
+    # Clicking a dot or an arrow picks the picture and starts its 10 seconds over
     $script:BannerHover = $false
     $Banner.add_MouseEnter({ $script:BannerHover = $true; $Banner.Invalidate() })
     $Banner.add_MouseLeave({ $script:BannerHover = $false; $Banner.Invalidate() })
@@ -725,12 +763,12 @@ try {
             $Hit = Get-BannerHit $E.Location
             if ($null -eq $Hit) { return }
             $N = $script:BannerImages.Count
-            if ($Hit -is [int]) { $script:BannerIndex = $Hit }
-            elseif ($Hit -eq "prev") { $script:BannerIndex = ($script:BannerIndex + $N - 1) % $N }
-            else { $script:BannerIndex = ($script:BannerIndex + 1) % $N }
+            $I = if ($Hit -is [int]) { $Hit }
+                 elseif ($Hit -eq "prev") { ($script:BannerIndex + $N - 1) % $N }
+                 else { ($script:BannerIndex + 1) % $N }
+            if ($I -ne $script:BannerIndex) { Set-BannerIndex $I }
             $BannerTimer.Stop()
             $BannerTimer.Start()
-            $Banner.Invalidate()
         }
         catch { }
     })
@@ -744,12 +782,27 @@ try {
     })
 
     $BannerTimer = New-Object Windows.Forms.Timer
-    $BannerTimer.Interval = 5000
+    $BannerTimer.Interval = 10000
     $BannerTimer.add_Tick({
-        if ($script:BannerImages.Count -gt 1) {
-            $script:BannerIndex = ($script:BannerIndex + 1) % $script:BannerImages.Count
+        try {
+            if ($script:BannerImages.Count -gt 1) {
+                Set-BannerIndex (($script:BannerIndex + 1) % $script:BannerImages.Count)
+            }
+        }
+        catch { }
+    })
+    # Repaints the banner about 30 times a second while a fade is under way
+    $FadeTimer = New-Object Windows.Forms.Timer
+    $FadeTimer.Interval = 33
+    $FadeTimer.add_Tick({
+        try {
+            if (-not $script:FadeClock -or $script:FadeClock.ElapsedMilliseconds -ge 1000) {
+                $FadeTimer.Stop()
+                $script:BannerFrom = -1
+            }
             $Banner.Invalidate()
         }
+        catch { $FadeTimer.Stop() }
     })
 
     $Timer = New-Object Windows.Forms.Timer
