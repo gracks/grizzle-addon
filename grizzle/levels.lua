@@ -17,6 +17,8 @@ local STYLES = {
     { name = "small dot in the level circle", dot = 11, keepCircle = true },
     { name = "dot in a smaller level circle", dot = 13, socket = 22 },
     { name = "dot on the portrait's ring, no level circle", dot = 13 },
+    { name = "thin ring, darker", ring = "target_ring_thin", bright = 0.65 },
+    { name = "thin ring, darker still", ring = "target_ring_thin", bright = 0.45 },
 };
 local DEFAULT_STYLE = 1;
 
@@ -48,7 +50,6 @@ local FRAME_ART = {
     ["interface\\targetingframe\\ui-targetingframe-rare"] = TEXTURES .. "target_frame_rare",
     ["interface\\targetingframe\\ui-targetingframe-rare-elite"] = TEXTURES .. "target_frame_rare_elite",
 };
-local CIRCLE_X, CIRCLE_Y = 201.88, 65.69               -- the level circle's center in the art, texels
 local FRIENDLY = { r = 1, g = 0.82, b = 0 };           -- Blizzard's color for levels of units you can't attack
 
 local function MakeParts(self)
@@ -71,14 +72,11 @@ local function MakeParts(self)
     return parts;
 end
 
--- puts a part where the level circle's center is, from the art's texture coordinates and the border's size
+-- puts a part where the level circle's center is: Blizzard centers the number there, shown or not. (Working it out
+-- from the art's texture coordinates landed about 20 px low and right in game.)
 local function AtCircle(self, part, size)
-    local border = self.borderTexture;
-    local left, top, _, _, _, _, right, bottom = border:GetTexCoord();
-    local x = (CIRCLE_X - left * 256) * border:GetWidth() / ((right - left) * 256);
-    local y = (CIRCLE_Y - top * 128) * border:GetHeight() / ((bottom - top) * 128);
     part:ClearAllPoints();
-    part:SetPoint("CENTER", border, "TOPLEFT", x, -y);
+    part:SetPoint("CENTER", self.levelText, "CENTER", 0, 0);
     part:SetSize(size, size);
     part:Show();
 end
