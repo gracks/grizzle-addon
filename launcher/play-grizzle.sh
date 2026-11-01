@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Play Grizzle: updates the Grizzle addon and client patch from GitHub, then starts WoW.
+# Play Grizzle: updates the Grizzle addon and client patch from GitHub, then starts WoW. Linux and macOS (the Windows
+# client under Wine or CrossOver: the 3.3.5a Mac client is 32-bit, which macOS no longer runs).
 # Keep this in the WoW folder (next to Wow.exe). If the update fails, it starts WoW anyway, unless what's installed is
 # another realm's addon and client patch (they would show spells and items wrong there): then it says so and stops.
 # It downloads only when the realm's branch has a new commit, and not while WoW is running.
@@ -7,6 +8,7 @@
 # How WoW is started can be changed without editing this file, e.g.:
 #   GRIZZLE_LAUNCH='lutris lutris:rungame/wow' ./play-grizzle.sh
 #   WINEPREFIX=~/games/wow ./play-grizzle.sh
+#   GRIZZLE_LAUNCH='"/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine" --bottle WoW Wow.exe' ./play-grizzle.sh
 # To play on the Test realm: GRIZZLE_BRANCH=test ./play-grizzle.sh (GRIZZLE_BRANCH=main to go back). Without it,
 # it plays the realm it played last time. Each branch logs in to its own realm (Veilmoor or Veilmoor Test), since the
 # client patch only matches that server.
@@ -60,18 +62,33 @@ installed() {
 # Whether the installed files can play this realm: they're its own, or from before the launcher recorded that
 files_for_realm() { [ ! -f "$INSTALLED" ] || [ "$INST_BRANCH" = "$BRANCH" ]; }
 
-# When the installed files were published, in local time ("Oct 31, 8:41 PM"), or nothing if unknown
-files_date() { [ -n "$INST_WHEN" ] && date -d "$INST_WHEN" '+%b %-d, %-I:%M %p' 2>/dev/null; }
+# When the installed files were published, in local time ("Oct 31, 8:41 PM"), or nothing if unknown. GNU date (Linux)
+# reads the ISO time with -d, BSD date (macOS) with -j -f; %e and %l pad with spaces, which tr squeezes out.
+files_date() {
+    local d
+    [ -n "$INST_WHEN" ] || return 1
+    d="$(date -d "$INST_WHEN" '+%b %e, %l:%M %p' 2>/dev/null ||
+        date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$INST_WHEN" '+%s' 2>/dev/null | xargs -I{} date -r {} '+%b %e, %l:%M %p')"
+    [ -n "$d" ] && tr -s ' ' <<<"$d"
+}
 
 # WoW reads patch-G.MPQ while it runs: replacing it then could crash WoW, and a failed copy would leave the addon and
 # the patch from different realms. Under Wine the process is named after the exe (the name, not the command line,
-# which a terminal running a command that mentions Wow.exe would match too).
-wow_running() { command -v pgrep >/dev/null && pgrep -ix 'wow\.exe' >/dev/null; }
+# which a terminal running a command that mentions Wow.exe would match too). Under CrossOver the process can have a
+# Wine loader's name, so macOS also matches Wow.exe anywhere in a command line.
+wow_running() {
+    command -v pgrep >/dev/null || return 1
+    pgrep -ix 'wow\.exe' >/dev/null && return 0
+    [ "$(uname)" = Darwin ] && pgrep -if 'wow\.exe' >/dev/null
+}
 
 # Says why WoW isn't starting, in a dialog too when there's a desktop (the launcher may run without a terminal)
 fail() {
     echo "ERROR: $1" >&2
-    if [ -n "$DISPLAY$WAYLAND_DISPLAY" ] && command -v zenity >/dev/null; then
+    if [ "$(uname)" = Darwin ]; then
+        osascript -e 'on run argv' -e 'display alert "Veilmoor" message (item 1 of argv) as critical' -e 'end run' \
+            "$1" >/dev/null 2>&1
+    elif [ -n "$DISPLAY$WAYLAND_DISPLAY" ] && command -v zenity >/dev/null; then
         zenity --error --title=Veilmoor --text="$1" 2>/dev/null
     fi
     exit 1
@@ -177,4 +194,6 @@ cd "$WOW_DIR" || exit 1
 if [ -n "$GRIZZLE_LAUNCH" ]; then
     exec bash -c "$GRIZZLE_LAUNCH"
 fi
+command -v wine >/dev/null ||
+    fail "Couldn't find wine to start WoW. Set GRIZZLE_LAUNCH to the command that starts it (see the top of play-grizzle.sh)."
 exec wine "$WOW_DIR/Wow.exe"

@@ -45,7 +45,27 @@ is installed) when:
 - WoW is still running and there's an update: close WoW and run it again.
 - The download failed and what you have belongs to the other realm: check your connection and run it again.
 
-## Both
+## Mac
+
+WoW 3.3.5a's own Mac client no longer runs on current macOS, so play the Windows client in CrossOver (or another Wine
+build), and use the Linux launcher.
+
+**Setup (once)**
+1. Put `launcher/play-grizzle.sh` in your WoW folder, next to `Wow.exe`.
+2. In the same folder, make a file named `play.command` with these lines (change `WoW` to your CrossOver bottle's
+   name):
+   ```
+   #!/bin/bash
+   cd "$(dirname "$0")"
+   GRIZZLE_LAUNCH='"/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine" --bottle WoW Wow.exe' ./play-grizzle.sh
+   ```
+3. In Terminal, in the WoW folder: `chmod +x play-grizzle.sh play.command`
+
+**Playing**: double-click `play.command`. It opens Terminal and works like the Linux launcher, with a dialog when it
+stops. To switch realms, add `GRIZZLE_BRANCH=test ` (or `main`) to the start of its last line once, run it, then take
+it out again: it keeps playing the realm it played last.
+
+## All platforms
 
 - Pick the realm in the launcher, not from the realm list in WoW: the client patch only matches its own realm. The
   addon warns you if they don't match.
