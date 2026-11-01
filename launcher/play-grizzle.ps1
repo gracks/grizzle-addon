@@ -314,7 +314,10 @@ function Show-Banner {
         $P = Join-Path $Addon $Name
         if (Test-Path $P) {
             # From bytes, not the file: an image loaded from a file keeps it locked, and the next update replaces it
-            $Banner.Image = [Drawing.Image]::FromStream((New-Object IO.MemoryStream(, [IO.File]::ReadAllBytes($P))))
+            $Old = $script:BannerImage
+            $script:BannerImage = [Drawing.Image]::FromStream((New-Object IO.MemoryStream(, [IO.File]::ReadAllBytes($P))))
+            if ($Old) { $Old.Dispose() }
+            $Banner.Invalidate()
             return
         }
     }
@@ -591,22 +594,41 @@ try {
     $Form.Controls.Add($Bottom)
     $Form.AcceptButton = $Play
 
-    # Banner: launcher/banner.jpg (or .png) from the addon repo, scaled to fill; the name in big letters until there is one
+    # Banner: launcher/banner.jpg (or .png) from the addon repo, 40% of the window's height. The image is scaled to cover
+    # it and centered, its overflow cut off, so any shape works (a 16:9 screenshot loses some top and bottom). The name in
+    # big letters until there is one.
+    $script:BannerImage = $null
     $Banner = New-Object Windows.Forms.PictureBox
     $Banner.Dock = "Top"
-    $Banner.Height = 190
-    $Banner.SizeMode = "Zoom"
+    $Banner.Height = [int]($Form.ClientSize.Height * 0.4)
     $Banner.BackColor = $Back
     $Banner.Margin = New-Object Windows.Forms.Padding(0)
     $Banner.add_Paint({
         param($S, $E)
-        if ($Banner.Image) { return }
+        $Img = $script:BannerImage
+        if ($Img) {
+            $W = $Banner.ClientSize.Width
+            $H = $Banner.ClientSize.Height
+            $Scale = [Math]::Max($W / $Img.Width, $H / $Img.Height)
+            $DW = [int][Math]::Ceiling($Img.Width * $Scale)
+            $DH = [int][Math]::Ceiling($Img.Height * $Scale)
+            $E.Graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $E.Graphics.DrawImage($Img, [int](($W - $DW) / 2), [int](($H - $DH) / 2), $DW, $DH)
+            return
+        }
         $Flags = [Windows.Forms.TextFormatFlags]"HorizontalCenter, VerticalCenter"
         $Big = New-Object Drawing.Font("Georgia", 44, [Drawing.FontStyle]::Bold)
         [Windows.Forms.TextRenderer]::DrawText($E.Graphics, "VEILMOOR", $Big, $Banner.ClientRectangle, $Gold, $Flags)
         $Big.Dispose()
     })
     $Form.Controls.Add($Banner)
+    $Form.add_Resize({
+        try {
+            $Banner.Height = [int]($Form.ClientSize.Height * 0.4)
+            $Banner.Invalidate()
+        }
+        catch { }
+    })
 
     $Timer = New-Object Windows.Forms.Timer
     $Timer.Interval = 250
