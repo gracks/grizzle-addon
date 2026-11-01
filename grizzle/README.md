@@ -38,7 +38,7 @@ server).
 ### Hidden creature levels (levels.lua)
 Creatures' level numbers are gone from the target and focus frames, tooltips and nameplates. Their danger color
 stays: the ring round the target's portrait, a dot on nameplates, and the tooltip's level line in that color. Players and their pets
-keep their numbers. Type `/moblevels` to show the numbers again (and again to hide them).
+keep their numbers. Type `/moblevels` to list the target frame's styles, `/moblevels 0` to show the numbers.
 
 ## Installation
 
