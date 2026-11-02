@@ -11,6 +11,14 @@ local function Hiding(unit)
     return unit and not UnitIsPlayer(unit) and not UnitPlayerControlled(unit);
 end
 
+-- The client reports "??" (level -1) for creatures 10 or more levels above you and for bosses, but a GM gets the real
+-- level, so the skull is worked out here too.
+local SKULL_LEVELS = 10;
+
+local function Skull(unit, level)
+    return level <= 0 or level >= UnitLevel("player") + SKULL_LEVELS or UnitClassification(unit) == "worldboss";
+end
+
 local function MakeDot(parent, anchor, size)
     local dot = parent:CreateTexture(nil, "OVERLAY");
     dot:SetTexture(DOT);
@@ -79,8 +87,13 @@ local function UpdateFrame(self)
     if not art then
         -- other art (boss frames): a dot where the number was
         if text:IsShown() then
-            parts.dot:SetVertexColor(text:GetTextColor());
-            parts.dot:Show();
+            if Skull(unit, UnitLevel(unit)) then
+                self.highLevelTexture:Hide();
+                parts.skull:Show();
+            else
+                parts.dot:SetVertexColor(text:GetTextColor());
+                parts.dot:Show();
+            end
             text:Hide();
         end
         return;
@@ -88,12 +101,13 @@ local function UpdateFrame(self)
     border:SetTexture(art);
     text:Hide();
     local level = UnitLevel(unit);
-    if level <= 0 then
+    local skull = Skull(unit, level);
+    if skull then
         self.highLevelTexture:Hide();          -- the skull goes on the ring instead
         parts.skull:Show();
     end
     if UnitCanAttack("player", unit) then
-        local color = level > 0 and GetQuestDifficultyColor(level) or QuestDifficultyColors["impossible"];
+        local color = skull and QuestDifficultyColors["impossible"] or GetQuestDifficultyColor(level);
         parts.ring:SetTexCoord(border:GetTexCoord());
         parts.ring:SetVertexColor(color.r * RING_BRIGHTNESS, color.g * RING_BRIGHTNESS, color.b * RING_BRIGHTNESS);
         parts.ring:Show();
@@ -123,12 +137,13 @@ GameTooltip:HookScript("OnTooltipSetUnit", function(self)
         local rest = text and text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):match(LEVEL_PATTERN);
         if rest then
             local level = UnitLevel(unit);
+            local skull = Skull(unit, level);
             if UnitCanAttack("player", unit) then
-                local color = level > 0 and GetQuestDifficultyColor(level) or QuestDifficultyColors["impossible"];
+                local color = skull and QuestDifficultyColors["impossible"] or GetQuestDifficultyColor(level);
                 rest = string.format("|cff%02x%02x%02x%s|r", math.floor(color.r * 255), math.floor(color.g * 255),
                     math.floor(color.b * 255), rest);
             end
-            if level <= 0 then
+            if skull then
                 rest = SKULL .. rest;
             end
             line:SetText(rest);
@@ -142,8 +157,9 @@ end);
 
 -- A 3.3.5 nameplate is an unnamed child of WorldFrame wearing the nameplate border; its second font string is the
 -- level, which the client recolors and shows or hides (for the skull) as plates are reused. A nameplate can't tell
--- players from creatures, so players' levels go there too.
-local plates = {};          -- nameplate -> { level = font string, dot = texture }
+-- players from creatures, so players' levels go there too. When the client shows a GM the number instead of its skull,
+-- the addon's own skull takes the number's place.
+local plates = {};          -- nameplate -> { level = font string, dot = texture, skull = texture }
 local numChildren = 0;
 
 local function AddPlate(frame)
@@ -157,7 +173,12 @@ local function AddPlate(frame)
         if region:GetObjectType() == "FontString" then
             fontStrings = fontStrings + 1;
             if fontStrings == 2 then
-                plates[frame] = { level = region, dot = MakeDot(frame, region, 10) };
+                local skull = frame:CreateTexture(nil, "OVERLAY");
+                skull:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull");
+                skull:SetSize(14, 14);
+                skull:SetPoint("CENTER", region, "CENTER", 0, 0);
+                skull:Hide();
+                plates[frame] = { level = region, dot = MakeDot(frame, region, 10), skull = skull };
                 return;
             end
         end
@@ -166,11 +187,16 @@ end
 
 local function UpdatePlate(plate)
     plate.level:SetAlpha(0);
+    plate.dot:Hide();
+    plate.skull:Hide();
     if plate.level:IsShown() then
-        plate.dot:SetVertexColor(plate.level:GetTextColor());
-        plate.dot:Show();
-    else
-        plate.dot:Hide();
+        local level = tonumber(plate.level:GetText());
+        if level and level >= UnitLevel("player") + SKULL_LEVELS then
+            plate.skull:Show();
+        else
+            plate.dot:SetVertexColor(plate.level:GetTextColor());
+            plate.dot:Show();
+        end
     end
 end
 
