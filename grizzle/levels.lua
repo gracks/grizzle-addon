@@ -1,4 +1,4 @@
--- Grizzle hidden levels (doc/grizzle/unknown.md "Not seeing a mob's level"): a creature's level number is gone from
+-- Grizzle hidden levels (doc/grizzle/discovery.md "Not seeing a mob's level"): a creature's level number is gone from
 -- the target and focus frames, the unit tooltip and the nameplates. The danger color takes its place: a thin ring
 -- round the target's portrait, a dot on nameplates, the rest of the tooltip's level line. The "??" skull stays.
 -- Players and what they control (pets, totems) keep their numbers. No switch to show them: players don't get one.
