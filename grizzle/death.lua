@@ -152,11 +152,11 @@ events:SetScript("OnEvent", function(self, event, prefix, message, channel)
 end);
 
 -- --- a level lost --------------------------------------------------------------------------------
--- The client plays its level-up glow and ding on any change of the level, a drop included. Just before a level lost
--- to death drops (at the ghost's revive), the server sends an addon whisper "GRZ_LVLLOSS": sound effects go off, so
--- the ding goes unheard, and once the level has dropped this sound plays on the Master channel, which plays with
--- sound effects off. They come back on 4.5 s later (the ding is over by then), or after 3 s without the drop.
--- GrizzleSfxMuted (SavedVariables) turns them back on after a /reload in between.
+-- The server sends an addon whisper "GRZ_LVLLOSS" for a level lost to death. "lost", as the ghost reaches the
+-- graveyard: this sound plays (with Death.LevelLossVisual, the red level-up model, from the server). "mute", just
+-- before the level drops at the revive: the client plays its level-up ding on any change of the level, a drop
+-- included, so sound effects go off until 4.5 s after the drop (the ding is over by then), or 3 s without one.
+-- Music and ambience play on. GrizzleSfxMuted (SavedVariables) turns them back on after a /reload in between.
 
 local LEVEL_LOSS_PREFIX = "GRZ_LVLLOSS";
 local LEVEL_LOSS_SOUND = "Interface\\AddOns\\grizzle\\sounds\\levelloss.wav";
@@ -179,7 +179,6 @@ local function OnUpdate(self, elapsed)
     if levelBefore and UnitLevel("player") < levelBefore then
         levelBefore = nil;
         timeLeft = 4.5;
-        PlaySoundFile(LEVEL_LOSS_SOUND, "Master");
     end
     timeLeft = timeLeft - elapsed;
     if timeLeft <= 0 then
@@ -195,13 +194,17 @@ levelLoss:SetScript("OnEvent", function(self, event, prefix, message, channel)
         if prefix ~= LEVEL_LOSS_PREFIX or channel ~= "WHISPER" then
             return;
         end
-        if GetCVar("Sound_EnableSFX") == "1" then
-            GrizzleSfxMuted = true;
-            SetCVar("Sound_EnableSFX", 0);
+        if message == "lost" then
+            PlaySoundFile(LEVEL_LOSS_SOUND);
+        elseif message == "mute" then
+            if GetCVar("Sound_EnableSFX") == "1" then
+                GrizzleSfxMuted = true;
+                SetCVar("Sound_EnableSFX", 0);
+            end
+            levelBefore = UnitLevel("player");
+            timeLeft = 3;
+            self:SetScript("OnUpdate", OnUpdate);
         end
-        levelBefore = UnitLevel("player");
-        timeLeft = 3;
-        self:SetScript("OnUpdate", OnUpdate);
     else
         Unmute();
     end
