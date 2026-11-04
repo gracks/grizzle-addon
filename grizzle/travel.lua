@@ -150,10 +150,12 @@ end
 -- The Twinned Bindstone's marker (doc/grizzle/bindstone.md "On the compass"): toward the other half, brighter the
 -- closer it is. A solid cyan arrowhead under the letter row, pointing up at the bearing: drawn additive over the
 -- letters it washed out (Greg's playtest, Oct 28 2026). The server whispers GRZ_BIND <angle>\t<step 1-3>\t<ok|trouble|pulled>, or nothing for no marker.
+-- The marker glides to each new bearing instead of jumping (Greg's playtest, Nov 4 2026: "very jumpy").
 local BIND_PREFIX = "GRZ_BIND";
-local BIND_ALPHA = { 0.55, 0.75, 1 };          -- by step, far to near
-local BIND_SIZE = 14;
-local bind;                                     -- { bearing, step, state }, or nil
+local BIND_ALPHA = { 0.4, 0.55, 0.75 };        -- by step, far to near
+local BIND_SIZE = 9;
+local BIND_GLIDE = 0.15;                        -- s, time constant of the glide
+local bind;                                     -- { bearing (shown), target, step, state }, or nil
 local heading = 0;
 
 local marker = compass:CreateTexture(nil, "ARTWORK");
@@ -183,9 +185,14 @@ end
 
 -- trouble (holder dead or fighting): a slow, uneven flicker; pulled (they're coming to you): a pulse
 local markerAnim = CreateFrame("Frame");
-markerAnim:SetScript("OnUpdate", function()
+markerAnim:SetScript("OnUpdate", function(self, elapsed)
     if not bind then
         return;
+    end
+    local gap = (bind.target - bind.bearing + 540) % 360 - 180;
+    if gap ~= 0 then
+        bind.bearing = math.abs(gap) < 0.05 and bind.target or (bind.bearing + gap * (1 - math.exp(-elapsed / BIND_GLIDE))) % 360;
+        PlaceMarker();
     end
     local t = GetTime();
     local alpha, size = markerAlpha, BIND_SIZE;
@@ -210,7 +217,8 @@ bindEvents:SetScript("OnEvent", function(self, event, prefix, message, channel)
     angle = tonumber(angle);
     if angle then
         -- the server's angle runs like GetPlayerFacing: 0 = north, counter-clockwise
-        bind = { bearing = (360 - math.deg(angle)) % 360, step = tonumber(step) or 1, state = state or "ok" };
+        local target = (360 - math.deg(angle)) % 360;
+        bind = { bearing = bind and bind.bearing or target, target = target, step = tonumber(step) or 1, state = state or "ok" };
     else
         bind = nil;
     end
